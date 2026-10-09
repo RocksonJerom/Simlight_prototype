@@ -26,7 +26,7 @@ export function MetricsSidebar({
   }))
 
   return (
-    <aside className="w-full lg:w-72 bg-[#0f1f35] border-l border-[#1e3a5f] p-4 space-y-5 shrink-0">
+    <aside className="w-full lg:w-72 xl:w-80 bg-[#0f1f35] border-l border-[#1e3a5f] p-4 space-y-5 shrink-0 overflow-y-auto lg:max-h-full">
       {budget !== undefined && risk !== undefined && score !== undefined && (
         <div>
           <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-3">Live gauges</h3>

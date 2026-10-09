@@ -6,7 +6,7 @@ export function Header() {
 
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <div className="w-full max-w-[min(100%,90rem)] mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link to="/teach" className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center text-white font-bold text-sm hover:opacity-90">
             SL

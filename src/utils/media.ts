@@ -6,7 +6,7 @@ export interface SceneMedia {
   name: string
 }
 
-/** Scene background: video first (immersive), then image. */
+/** Scene media for PiP in the animated world — video preferred, then image. */
 export function getSceneMedia(assets: MediaAsset[]): SceneMedia | null {
   const video = assets.find((a) => a.type === 'video' && a.url)
   if (video?.url) return { type: 'video', url: video.url, name: video.name }

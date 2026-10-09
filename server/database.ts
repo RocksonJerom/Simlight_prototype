@@ -117,12 +117,18 @@ function migrateSchema(database: Database.Database) {
 
   addCol('simulations', 'play_token', 'TEXT')
   addCol('simulations', 'version', 'INTEGER NOT NULL DEFAULT 1')
+  addCol('simulations', 'v2_data', 'TEXT')
+  addCol('simulations', 'report_config', 'TEXT')
   addCol('sessions', 'metric_scores', "TEXT NOT NULL DEFAULT '{}'")
   addCol('sessions', 'time_limit_seconds', 'INTEGER')
   addCol('sessions', 'expires_at', 'TEXT')
   addCol('sessions', 'user_id', 'TEXT')
+  addCol('sessions', 'reg_number', 'TEXT')
+  addCol('sessions', 'round_history', 'TEXT')
+  addCol('sessions', 'scorecard', 'TEXT')
   addCol('assignments', 'invite_token', 'TEXT')
   addCol('assignments', 'user_id', 'TEXT')
+  addCol('assignments', 'reg_number', 'TEXT')
   addCol('assignments', 'notified', 'INTEGER NOT NULL DEFAULT 0')
 
   database.exec(`

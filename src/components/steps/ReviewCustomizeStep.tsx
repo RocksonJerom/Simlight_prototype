@@ -3,6 +3,7 @@ import { useSimulation } from '../../context/SimulationContext'
 import { api } from '../../api/client'
 import { ContentBlocksView } from '../content/ContentBlocksView'
 import { ContentBlockEditor } from '../content/ContentBlockEditor'
+import { AssessmentEditor } from '../assessment/AssessmentEditor'
 
 const impactColors = {
   Low: 'bg-green-100 text-green-700',
@@ -20,6 +21,8 @@ export function ReviewCustomizeStep() {
     saving,
     selectedEventId,
     setSelectedEventId,
+    selectedPhaseId,
+    setSelectedPhaseId,
     updateEvent,
     addPhase,
     addEvent,
@@ -47,6 +50,18 @@ export function ReviewCustomizeStep() {
   }
 
   const selectedEvent = g.events.find((e) => e.id === selectedEventId) ?? g.events[0]
+  const visibleEvents = selectedPhaseId
+    ? g.events.filter((e) => e.phaseId === selectedPhaseId)
+    : g.events
+
+  const handlePhaseSelect = (phaseId: string) => {
+    setSelectedPhaseId(phaseId)
+    const phaseEvents = g.events.filter((e) => e.phaseId === phaseId)
+    if (phaseEvents.length > 0) {
+      const stillVisible = phaseEvents.some((e) => e.id === selectedEventId)
+      if (!stillVisible) setSelectedEventId(phaseEvents[0].id)
+    }
+  }
 
   const handleSave = async () => {
     await saveNow()
@@ -64,21 +79,15 @@ export function ReviewCustomizeStep() {
         id: `d${Date.now()}_${i}`,
         text,
       }))
-      updateEvent(selectedEvent.id, { decisions: newDecisions })
+      updateEvent(selectedEvent.id, {
+        decisions: newDecisions,
+        assessment: { ...(selectedEvent.assessment ?? { type: 'mcq', prompt: 'What is your decision?' }), type: 'mcq' },
+      })
     } catch (err) {
       setAiError(err instanceof Error ? err.message : 'AI suggestion failed')
     } finally {
       setAiLoading(false)
     }
-  }
-
-  const addDecision = () => {
-    if (!selectedEvent) return
-    const decisions = [
-      ...selectedEvent.decisions,
-      { id: `d${Date.now()}`, text: 'New option' },
-    ]
-    updateEvent(selectedEvent.id, { decisions })
   }
 
   return (
@@ -88,7 +97,12 @@ export function ReviewCustomizeStep() {
           3
         </span>
         <h2 className="text-white font-semibold">Review & Customize</h2>
-        {saving && <span className="ml-auto text-xs text-white/80">Auto-saving…</span>}
+        <span
+          className={`ml-auto text-xs text-white/80 transition-opacity ${saving ? 'opacity-100' : 'opacity-0'}`}
+          aria-hidden={!saving}
+        >
+          Auto-saving…
+        </span>
       </div>
 
       <div className="flex flex-col lg:flex-row min-h-[420px]">
@@ -110,11 +124,18 @@ export function ReviewCustomizeStep() {
             </div>
             <ul className="space-y-1">
               {g.phases.map((p) => (
-                <li
-                  key={p.id}
-                  className="px-2 py-1.5 text-sm text-slate-700 rounded hover:bg-white"
-                >
-                  {p.order}. {p.name}
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => handlePhaseSelect(p.id)}
+                    className={`w-full text-left px-2 py-1.5 text-sm rounded transition-colors ${
+                      selectedPhaseId === p.id
+                        ? 'bg-teal-100 text-teal-800 font-medium'
+                        : 'text-slate-700 hover:bg-white'
+                    }`}
+                  >
+                    {p.order}. {p.name}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -125,14 +146,21 @@ export function ReviewCustomizeStep() {
               <h3 className="text-xs font-semibold text-slate-500 uppercase">Events</h3>
               <button
                 type="button"
-                onClick={() => addEvent(g.phases[0]?.id ?? 'p1', 'New Event')}
+                onClick={() =>
+                  addEvent(selectedPhaseId ?? g.phases[0]?.id ?? 'p1', 'New Event')
+                }
                 className="text-xs text-teal-600 hover:text-teal-800 font-medium"
               >
                 + Add
               </button>
             </div>
             <ul className="space-y-1">
-              {g.events.map((e, i) => (
+              {visibleEvents.length === 0 ? (
+                <li className="px-2 py-1.5 text-xs text-slate-400 italic">No events in this phase</li>
+              ) : (
+                visibleEvents.map((e) => {
+                  const i = g.events.findIndex((ev) => ev.id === e.id)
+                  return (
                 <li key={e.id}>
                   <button
                     type="button"
@@ -153,7 +181,9 @@ export function ReviewCustomizeStep() {
                     ⋮⋮ {e.title}
                   </button>
                 </li>
-              ))}
+                  )
+                })
+              )}
             </ul>
           </div>
         </aside>
@@ -205,49 +235,13 @@ export function ReviewCustomizeStep() {
               </span>
             </div>
 
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <h4 className="text-xs font-semibold text-slate-500 uppercase">Decision Points</h4>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={addDecision}
-                    className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
-                  >
-                    + Add option
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAiSuggest}
-                    disabled={aiLoading}
-                    className="text-xs px-2 py-1 rounded bg-violet-100 text-violet-700 hover:bg-violet-200 disabled:opacity-50"
-                  >
-                    {aiLoading ? 'Generating…' : '✨ AI suggest questions'}
-                  </button>
-                </div>
-              </div>
-              {aiError && <p className="text-xs text-red-600 mb-2">{aiError}</p>}
-              <ol className="space-y-2">
-                {selectedEvent.decisions.map((d, i) => (
-                  <li key={d.id} className="flex items-center gap-2">
-                    <span className="w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-medium shrink-0">
-                      {i + 1}
-                    </span>
-                    <input
-                      type="text"
-                      value={d.text}
-                      onChange={(e) => {
-                        const decisions = selectedEvent.decisions.map((dec) =>
-                          dec.id === d.id ? { ...dec, text: e.target.value } : dec
-                        )
-                        updateEvent(selectedEvent.id, { decisions })
-                      }}
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                    />
-                  </li>
-                ))}
-              </ol>
-            </div>
+            <AssessmentEditor
+              event={selectedEvent}
+              onChange={(patch) => updateEvent(selectedEvent.id, patch)}
+              onAiSuggest={handleAiSuggest}
+              aiLoading={aiLoading}
+              aiError={aiError}
+            />
 
             <div className="flex gap-3 pt-2">
               <button

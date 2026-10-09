@@ -1,58 +1,80 @@
 import type { ReactNode } from 'react'
 import type { Event } from '../../types/simulation'
-import { SceneMediaView } from '../media/SceneMediaView'
+import { AnimatedSimulationWorld, SceneMediaPiP } from './AnimatedSimulationWorld'
 import type { SceneMedia } from '../../utils/media'
 
 export function SimulationScene({
   phaseName,
+  industry,
   sceneMedia,
   event,
+  eventIndex = 0,
+  showInfo,
+  onCloseInfo,
   children,
 }: {
   phaseName?: string
+  industry?: string
   sceneMedia: SceneMedia | null
   event?: Event
+  eventIndex?: number
+  showInfo?: boolean
+  onCloseInfo?: () => void
   children?: ReactNode
 }) {
   return (
-    <div className="relative flex-1 min-h-[280px] lg:min-h-[360px] bg-gradient-to-b from-[#1a3a52] to-[#0d2137] overflow-hidden">
-      {/* Isometric city-style backdrop */}
-      <div className="absolute inset-0 opacity-40">
-        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-[#0a1628] to-transparent" />
-        <div className="absolute bottom-8 left-[10%] w-16 h-20 bg-slate-600/50 skew-x-6 rounded-sm" />
-        <div className="absolute bottom-12 left-[25%] w-20 h-28 bg-slate-500/40 -skew-x-3 rounded-sm" />
-        <div className="absolute bottom-6 left-[45%] w-24 h-32 bg-[#005b7f]/30 rounded-sm" />
-        <div className="absolute bottom-10 right-[20%] w-18 h-24 bg-slate-600/45 skew-x-12 rounded-sm" />
-        <div className="absolute bottom-4 right-[8%] w-14 h-16 bg-slate-500/50 rounded-sm" />
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full bg-cyan-400/5 blur-3xl" />
-      </div>
+    <div className="relative flex-1 min-h-[240px] sm:min-h-[320px] lg:min-h-[380px] bg-[#0a1628] overflow-hidden">
+      {/* Primary gameplay: animated isometric simulation world */}
+      <AnimatedSimulationWorld
+        phaseName={phaseName}
+        industry={industry}
+        eventTitle={event?.title}
+        eventIndex={eventIndex}
+      />
 
-      {sceneMedia ? (
-        <SceneMediaView
-          media={sceneMedia}
-          className="absolute inset-0 w-full h-full object-cover opacity-60"
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center">
-            <div className="text-6xl mb-2 drop-shadow-lg">🏙️</div>
-            <p className="text-cyan-200/80 text-sm font-medium">{phaseName ?? 'Simulation World'}</p>
+      {/* Optional uploaded media as picture-in-picture — not full-screen replacement */}
+      {sceneMedia && <SceneMediaPiP media={sceneMedia} />}
+
+      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0a1628]/70 to-transparent pointer-events-none z-[3]" />
+
+      {showInfo && event && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4 sm:p-6">
+          <button
+            type="button"
+            aria-label="Close event information"
+            className="absolute inset-0 bg-black/25"
+            onClick={onCloseInfo}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-info-title"
+            className="relative bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/50 p-5 sm:p-6 max-w-lg w-full max-h-[80%] overflow-y-auto"
+          >
+            <button
+              type="button"
+              onClick={onCloseInfo}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-lg leading-none"
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="flex items-start gap-3 pr-8">
+              <span className="text-2xl shrink-0">📋</span>
+              <div>
+                <h3 id="event-info-title" className="font-bold text-slate-900 text-lg">
+                  {event.title}
+                </h3>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed">{event.description}</p>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {event && (
-        <div className="absolute inset-0 flex items-center justify-center p-4 z-10">
-          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/50 p-6 max-w-lg w-full animate-in fade-in">
-            <div className="flex items-start gap-3 mb-3">
-              <span className="text-2xl">📋</span>
-              <div>
-                <h3 className="font-bold text-slate-900 text-lg">{event.title}</h3>
-                <p className="text-sm text-slate-600 mt-1 leading-relaxed">{event.description}</p>
-              </div>
-            </div>
-            {children}
-          </div>
+      {children && (
+        <div className="absolute inset-x-0 bottom-0 z-10 p-4 pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-3xl mx-auto">{children}</div>
         </div>
       )}
     </div>

@@ -36,7 +36,7 @@ function StepContent() {
 
   return (
 
-    <main className="max-w-7xl mx-auto px-4 py-6">
+    <main className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10 py-6">
 
       {stepInfo && (
 
@@ -90,15 +90,14 @@ function CreatorWizardInner() {
 
       <Header />
 
-      {saving && (
-
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-1 text-center text-xs text-amber-700">
-
-          Saving…
-
-        </div>
-
-      )}
+      <div
+        className={`bg-amber-50 border-b border-amber-200 px-4 py-1 text-center text-xs text-amber-700 transition-opacity ${
+          saving ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden={!saving}
+      >
+        Saving…
+      </div>
 
       <CreatorWizardProgress />
 

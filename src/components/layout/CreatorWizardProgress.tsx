@@ -17,7 +17,7 @@ export function CreatorWizardProgress() {
 
   return (
     <nav className="bg-white border-b border-slate-200 px-4 py-3 overflow-x-auto">
-      <div className="max-w-7xl mx-auto flex items-center gap-1 min-w-max">
+      <div className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-1 min-w-max">
         {STEPS.map((s, i) => {
           const enabled = isStepEnabled(s.step)
           const active = currentStep === s.step

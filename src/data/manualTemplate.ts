@@ -16,6 +16,10 @@ export function createManualTemplate(meta: SimulationMeta): GeneratedContent {
           { id: 'd1', text: 'Option A — add your first choice' },
           { id: 'd2', text: 'Option B — add your second choice' },
         ],
+        assessment: {
+          type: 'mcq',
+          prompt: 'What is your first decision?',
+        },
       },
     ],
     metrics: [

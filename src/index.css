@@ -16,8 +16,391 @@ body {
   font-family: var(--font-sans);
   background: #f1f5f9;
   color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* ── Animated isometric simulation world (gameplay scene) ── */
+.sim-world {
+  background: linear-gradient(180deg, #0c1f33 0%, #0a1628 45%, #061018 100%);
+}
+
+.sim-sky {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 50% at 50% 0%, #1e4a6e 0%, transparent 70%);
+  opacity: 0.9;
+}
+
+.sim-sun {
+  position: absolute;
+  top: 12%;
+  right: 18%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fde68a 0%, #f59e0b 60%, transparent 70%);
+  animation: sim-pulse-glow 4s ease-in-out infinite;
+  box-shadow: 0 0 40px #f59e0b66;
+}
+
+.sim-cloud {
+  position: absolute;
+  background: #ffffff18;
+  border-radius: 50px;
+  filter: blur(2px);
+  animation: sim-cloud-drift 28s linear infinite;
+}
+.sim-cloud::before,
+.sim-cloud::after {
+  content: '';
+  position: absolute;
+  background: inherit;
+  border-radius: 50%;
+}
+.sim-cloud-1 { width: 80px; height: 28px; top: 14%; left: -10%; }
+.sim-cloud-1::before { width: 40px; height: 40px; top: -18px; left: 12px; }
+.sim-cloud-1::after { width: 50px; height: 36px; top: -12px; right: 8px; }
+.sim-cloud-2 { width: 100px; height: 32px; top: 22%; left: -15%; animation-duration: 36s; animation-delay: -8s; }
+.sim-cloud-2::before { width: 44px; height: 44px; top: -20px; left: 16px; }
+.sim-cloud-3 { width: 70px; height: 24px; top: 8%; left: -8%; animation-duration: 22s; animation-delay: -14s; }
+
+.sim-grid-floor {
+  position: absolute;
+  bottom: 0;
+  left: -20%;
+  right: -20%;
+  height: 55%;
+  background-image:
+    linear-gradient(#22d3ee15 1px, transparent 1px),
+    linear-gradient(90deg, #22d3ee15 1px, transparent 1px);
+  background-size: 48px 28px;
+  transform: perspective(400px) rotateX(62deg);
+  transform-origin: center bottom;
+  animation: sim-grid-pulse 6s ease-in-out infinite;
+}
+
+.sim-city {
+  position: absolute;
+  bottom: 18%;
+  left: 0;
+  right: 0;
+  height: 200px;
+}
+
+.sim-building-wrap {
+  position: absolute;
+  bottom: 0;
+  transform-style: preserve-3d;
+  animation: sim-building-rise 1.2s ease-out both;
+}
+
+.sim-building-simple {
+  position: relative;
+  animation: sim-building-float 5s ease-in-out infinite;
+}
+
+.sim-tower {
+  position: relative;
+  margin: 0 auto;
+  transform: skewX(-6deg);
+  border-radius: 3px 3px 0 0;
+  border: 1px solid #ffffff20;
+  box-shadow: inset -4px 0 12px #00000030;
+}
+
+.sim-tower-roof {
+  height: 8px;
+  margin: 0 auto 0;
+  transform: skewX(-6deg);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.sim-tower-shadow {
+  height: 6px;
+  margin: 2px auto 0;
+  background: #00000050;
+  border-radius: 50%;
+  filter: blur(3px);
+  transform: skewX(-6deg);
+}
+
+.sim-windows-simple {
+  position: absolute;
+  inset: 8px 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+}
+
+.sim-conveyor {
+  position: absolute;
+  bottom: 20%;
+  left: 10%;
+  right: 10%;
+  height: 20px;
+  z-index: 4;
+}
+
+.sim-conveyor-belt {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, #334155 0, #334155 12px, #475569 12px, #475569 24px);
+  border-radius: 4px;
+  border: 1px solid #64748b;
+  animation: sim-belt-scroll 2s linear infinite;
+}
+
+.sim-conveyor-box {
+  position: absolute;
+  top: -10px;
+  width: 16px;
+  height: 14px;
+  background: #f59e0b;
+  border: 1px solid #ffffff40;
+  border-radius: 2px;
+  animation: sim-box-move 6s linear infinite;
+}
+
+.sim-conveyor-box-2 {
+  animation-delay: -3s;
+}
+
+@keyframes sim-belt-scroll {
+  from { background-position: 0 0; }
+  to { background-position: 24px 0; }
+}
+
+@keyframes sim-box-move {
+  from { left: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  to { left: calc(100% - 16px); opacity: 0; }
+}
+
+.sim-window {
+  display: block;
+  height: 8px;
+  border-radius: 1px;
+  background: #fbbf2444;
+  animation: sim-window-blink 3s ease-in-out infinite;
+}
+
+.sim-truck {
+  position: absolute;
+  bottom: 22%;
+  left: -80px;
+  width: 64px;
+  height: 28px;
+  animation: sim-truck-drive 18s linear infinite;
+  z-index: 5;
+}
+
+.sim-truck-body {
+  position: absolute;
+  left: 22px;
+  width: 38px;
+  height: 22px;
+  background: #f59e0b;
+  border-radius: 2px;
+  border: 1px solid #ffffff30;
+}
+
+.sim-truck-cab {
+  position: absolute;
+  left: 0;
+  width: 24px;
+  height: 20px;
+  background: #ea580c;
+  border-radius: 3px 2px 2px 3px;
+  border: 1px solid #ffffff30;
+}
+
+.sim-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sim-particle {
+  position: absolute;
+  bottom: 30%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #22d3ee;
+  box-shadow: 0 0 8px #22d3ee;
+  animation: sim-particle-rise 4s ease-in-out infinite;
+}
+
+.sim-hud-badge {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #0a1628cc;
+  border: 1px solid;
+  backdrop-filter: blur(8px);
+  animation: sim-badge-in 0.8s ease-out;
+}
+
+.sim-hud-phase {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 0;
+}
+
+.sim-hud-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #22d3ee;
+  margin: 0 0 2px;
+}
+
+.sim-hud-industry {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 2px 0 0;
+}
+
+.sim-event-ticker {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  max-width: min(280px, 45%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #0a1628bb;
+  border: 1px solid #22d3ee33;
+  backdrop-filter: blur(6px);
+  animation: sim-ticker-slide 0.6s ease-out;
+}
+
+.sim-event-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: sim-pulse-glow 2s ease-in-out infinite;
+}
+
+.sim-event-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-scanline {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    #ffffff03 2px,
+    #ffffff03 4px
+  );
+  pointer-events: none;
+}
+
+.sim-media-pip {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: min(200px, 28vw);
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #22d3ee55;
+  box-shadow: 0 8px 32px #00000066;
+  z-index: 6;
+  background: #000;
+}
+
+.sim-pip-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #e2e8f0;
+  background: linear-gradient(180deg, #000000aa, transparent);
+  z-index: 1;
+}
+
+@keyframes sim-cloud-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(120vw); }
+}
+
+@keyframes sim-truck-drive {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(100vw + 120px)); }
+}
+
+@keyframes sim-window-blink {
+  0%, 100% { opacity: 0.25; background: #fbbf2444; }
+  50% { opacity: 1; background: #fde68a; }
+}
+
+@keyframes sim-pulse-glow {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes sim-building-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes sim-building-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sim-particle-rise {
+  0% { opacity: 0; transform: translateY(0) scale(0.5); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-120px) scale(1); }
+}
+
+@keyframes sim-grid-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes sim-badge-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sim-ticker-slide {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
 }

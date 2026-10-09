@@ -34,8 +34,10 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
-  orgName: string
+  orgName?: string
   name: string
   email: string
   password: string
+  role?: UserRole
+  regNumber?: string
 }

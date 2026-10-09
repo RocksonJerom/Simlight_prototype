@@ -28,10 +28,15 @@ export const store = {
       ? import('../pg/store.js').then((m) => m.getSimulation(id, opts))
       : Promise.resolve(sqliteDb.getSimulation(id, opts)),
 
-  createSimulation: (meta: Parameters<typeof sqliteDb.createSimulation>[0], orgId: string, userId: string) =>
+  createSimulation: (
+    meta: Parameters<typeof sqliteDb.createSimulation>[0],
+    orgId: string = 'default-org',
+    userId: string = 'default-user',
+    v2Data?: any
+  ) =>
     getDatabaseKind() === 'postgres'
       ? import('../pg/store.js').then((m) => m.createSimulation(meta, orgId, userId))
-      : Promise.resolve(sqliteDb.createSimulation(meta, orgId, userId)),
+      : Promise.resolve(sqliteDb.createSimulation(meta, orgId, userId, v2Data)),
 
   updateSimulation: (
     id: string,
@@ -85,16 +90,26 @@ export const store = {
     simulationId: string,
     learnerName: string,
     assignmentId?: string,
-    userId?: string
+    userId?: string,
+    regNumber?: string
   ) =>
     getDatabaseKind() === 'postgres'
       ? import('../pg/store.js').then((m) => m.createSession(simulationId, learnerName, assignmentId, userId))
-      : Promise.resolve(sqliteDb.createSession(simulationId, learnerName, assignmentId, userId)),
+      : Promise.resolve(sqliteDb.createSession(simulationId, learnerName, assignmentId, userId, regNumber)),
 
   getSession: (id: string) =>
     getDatabaseKind() === 'postgres'
       ? import('../pg/store.js').then((m) => m.getSession(id))
       : Promise.resolve(sqliteDb.getSession(id)),
+
+  getSessionReport: (sessionId: string) =>
+    Promise.resolve(sqliteDb.getSessionReport(sessionId)),
+
+  updateReportConfig: (simulationId: string, orgId: string, config: any) =>
+    Promise.resolve(sqliteDb.updateReportConfig(simulationId, orgId, config)),
+
+  listLearnerAssignments: (userId: string, userEmail?: string) =>
+    Promise.resolve(sqliteDb.listLearnerAssignments(userId, userEmail)),
 
   updateSession: (id: string, updates: Parameters<typeof sqliteDb.updateSession>[1]) =>
     getDatabaseKind() === 'postgres'
@@ -179,11 +194,6 @@ export const store = {
     getDatabaseKind() === 'postgres'
       ? import('../pg/store.js').then((m) => m.consumePasswordReset(token))
       : Promise.resolve(sqliteDb.consumePasswordReset(token)),
-
-  listLearnerAssignments: (userId: string) =>
-    getDatabaseKind() === 'postgres'
-      ? import('../pg/store.js').then((m) => m.listLearnerAssignments(userId))
-      : Promise.resolve(sqliteDb.listLearnerAssignments(userId)),
 
   createOrganization: (name: string) =>
     getDatabaseKind() === 'postgres'

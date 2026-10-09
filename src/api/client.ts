@@ -4,6 +4,7 @@ import type {
   Assignment,
   SimulationAnalytics,
   AiGenerationSource,
+  StudentReportData,
 } from '../types/simulation'
 import type { User, Organization, LoginRequest, RegisterRequest } from '../types/auth'
 import type {
@@ -31,6 +32,8 @@ export interface AiStatus {
   anthropic: boolean
   nvidia: boolean
   groq: boolean
+  huggingface: boolean
+  hfVideoModel: string | null
   model: string | null
   message: string
 }
@@ -154,6 +157,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  updateReportConfig: (simulationId: string, config: any) =>
+    request<SimulationRecord>(`/simulations/${simulationId}/report-config`, {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
+
   deleteSimulation: (id: string) =>
     request<void>(`/simulations/${id}`, { method: 'DELETE' }),
 
@@ -191,6 +200,12 @@ export const api = {
       body: JSON.stringify({ eventId }),
     }),
 
+  generateSceneVisual: (simulationId: string, prompt?: string) =>
+    request<{ asset: SimulationRecord['assets'][0]; simulation: SimulationRecord; prompt: string }>(
+      `/simulations/${simulationId}/generate-scene`,
+      { method: 'POST', body: JSON.stringify({ prompt }) }
+    ),
+
   getAiStatus: () => request<AiStatus>('/ai/status'),
 
   publishSimulation: (id: string, visibility?: SimulationRecord['visibility']) =>
@@ -211,6 +226,7 @@ export const api = {
       resumeSessionId?: string
       userId?: string
       roomCode?: string
+      regNumber?: string
     }
   ) =>
     request<PlaySession>(`/simulations/${simulationId}/sessions`, {
@@ -221,10 +237,48 @@ export const api = {
   getSession: (sessionId: string) =>
     request<{ session: PlaySession; simulation: SimulationRecord }>(`/sessions/${sessionId}`),
 
-  makeDecision: (sessionId: string, decisionId: string) =>
+  getSessionReport: (sessionId: string) =>
+    request<StudentReportData>(`/sessions/${sessionId}/report`),
+
+  completeV2Session: (
+    sessionId: string,
+    payload: {
+      history?: any[]
+      scorecard?: any
+      score?: number
+      variables?: Record<string, number>
+      completed?: boolean
+    }
+  ) =>
+    request<{ session: PlaySession }>(`/sessions/${sessionId}/v2-complete`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  saveV2Simulation: (simulation: any) =>
+    request<{ success: boolean; simulation: any; record: SimulationRecord }>('/v2/simulations', {
+      method: 'POST',
+      body: JSON.stringify({ simulation }),
+    }),
+
+  getV2Simulation: (id: string) =>
+    request<{ simulation?: any; record?: SimulationRecord }>(`/v2/simulations/${id}`),
+
+  generateV2Genie: (prompt?: string, facultyInputs?: any) =>
+    request<{ simulation: any; source: string }>('/v2/ai/generate', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, facultyInputs }),
+    }),
+
+  makeDecision: (
+    sessionId: string,
+    payload:
+      | { decisionId: string }
+      | { response: { text?: string; value?: string; blanks?: Record<string, string> } }
+  ) =>
     request<DecideResponse>(`/sessions/${sessionId}/decide`, {
       method: 'POST',
-      body: JSON.stringify({ decisionId }),
+      body: JSON.stringify(payload),
     }),
 
   uploadAsset: (simulationId: string, file: File) => {
@@ -246,7 +300,13 @@ export const api = {
 
   createAssignment: (
     simulationId: string,
-    data: { learnerName: string; learnerEmail?: string; dueDate?: string; sendEmail?: boolean }
+    data: {
+      learnerName: string
+      learnerEmail?: string
+      dueDate?: string
+      sendEmail?: boolean
+      regNumber?: string
+    }
   ) =>
     request<{ assignment: Assignment; playUrl: string }>(`/simulations/${simulationId}/assignments`, {
       method: 'POST',

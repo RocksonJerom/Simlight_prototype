@@ -11,9 +11,15 @@ export const authRouter = Router()
 const baseUrl = () => process.env.APP_URL ?? 'http://localhost:5173'
 
 authRouter.post('/register', async (req, res) => {
-  const { orgName, name, email, password } = req.body as RegisterRequest
-  if (!orgName?.trim() || !name?.trim() || !email?.trim() || !password?.trim()) {
-    res.status(400).json({ error: 'All fields are required' })
+  const { orgName, name, email, password, role = 'faculty', regNumber } = req.body as any
+  const isLearner = role === 'learner'
+
+  if (!isLearner && !orgName?.trim()) {
+    res.status(400).json({ error: 'Organization name is required for faculty' })
+    return
+  }
+  if (!name?.trim() || !email?.trim() || !password?.trim()) {
+    res.status(400).json({ error: 'Name, email, and password are required' })
     return
   }
   if (password.length < 6) {
@@ -25,15 +31,35 @@ authRouter.post('/register', async (req, res) => {
     return
   }
 
-  const org = await store.createOrganization(orgName.trim())
+  const effectiveOrgName = orgName?.trim() || 'SimLight Students'
+  let org
+  if (isLearner) {
+    // Try finding existing default student org or create one
+    try {
+      org = await store.createOrganization(effectiveOrgName)
+    } catch {
+      // ignore
+    }
+  } else {
+    org = await store.createOrganization(effectiveOrgName)
+  }
+  if (!org) {
+    org = await store.createOrganization(effectiveOrgName)
+  }
+
   const passwordHash = await hashPassword(password)
   const user = await store.createUser({
     email: email.trim(),
     passwordHash,
     name: name.trim(),
-    role: 'faculty',
+    role: isLearner ? 'learner' : 'faculty',
     orgId: org.id,
   })
+
+  // Link any pending assignments created by faculty with this email
+  if (isLearner) {
+    await store.listLearnerAssignments(user.id, user.email)
+  }
 
   const token = signToken({
     userId: user.id,
@@ -136,8 +162,8 @@ authRouter.post('/reset-password', async (req, res) => {
 })
 
 authRouter.get('/assignments', requireAuth, async (req: AuthedRequest, res) => {
-  if (req.auth!.role === 'learner') {
-    res.json(await store.listLearnerAssignments(req.auth!.userId))
+  if (req.auth!.role === 'learner' || req.auth!.role === 'faculty' || req.auth!.role === 'admin') {
+    res.json(await store.listLearnerAssignments(req.auth!.userId, req.auth!.email))
     return
   }
   res.json([])

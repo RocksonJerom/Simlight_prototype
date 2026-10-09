@@ -34,7 +34,7 @@ export function AnalyticsPage() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-[#005b7f] text-white px-6 py-5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
+        <div className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between">
           <div>
             <Link to={`/assign/${id}`} className="text-sm text-cyan-200 hover:text-white">
               ← Back to Assignments
@@ -63,7 +63,7 @@ export function AnalyticsPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+      <main className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-6">
         <AnalyticsDashboard data={data} />
 
         <section className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">

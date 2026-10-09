@@ -1,83 +1,75 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { CATALOG_CATEGORIES } from '../../data/categories'
-import { SearchBar } from '../catalog/SearchBar'
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user, logout } = useAuth()
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center font-bold text-sm">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col selection:bg-cyan-500 selection:text-black">
+      {/* Clean, Minimal Professional Header */}
+      <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center font-extrabold text-sm shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform">
               SL
             </div>
-            <span className="font-bold text-lg hidden sm:inline">SimLight</span>
+            <div>
+              <span className="font-extrabold text-base tracking-tight block text-white group-hover:text-cyan-400 transition-colors">
+                SimLight
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block -mt-1">
+                Business Simulation Platform
+              </span>
+            </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-1 text-sm">
-            <Link to="/" className="px-3 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white">
-              Home
-            </Link>
-            <Link
-              to="/browse"
-              className="px-3 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
-            >
-              Browse
-            </Link>
-            {CATALOG_CATEGORIES.filter((c) => c.slug !== 'all').map((cat) => (
-              <Link
-                key={cat.slug}
-                to={`/browse/${cat.slug}`}
-                className="px-3 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white"
-              >
-                {cat.icon} {cat.name.split(' ')[0]}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex-1 min-w-[200px] max-w-md">
-            <SearchBar />
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-3">
             {isAuthenticated ? (
-              <>
-                <Link
-                  to="/teach"
-                  className="px-3 py-1.5 text-sm font-medium bg-violet-600 rounded-lg hover:bg-violet-500"
-                >
-                  Teach
-                </Link>
-                <Link to="/learn" className="px-3 py-1.5 text-sm text-slate-300 hover:text-white">
-                  My sims
-                </Link>
-                <span className="text-xs text-slate-500 hidden lg:inline">{user?.name}</span>
+              <div className="flex items-center gap-3">
+                {user?.role === 'faculty' || user?.role === 'admin' ? (
+                  <Link
+                    to="/teach"
+                    className="px-4 py-2 text-xs font-bold bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-xl hover:bg-indigo-600/40 transition flex items-center gap-1.5"
+                  >
+                    <span>🏛️</span> Faculty Dashboard
+                  </Link>
+                ) : (
+                  <Link
+                    to="/learn"
+                    className="px-4 py-2 text-xs font-bold bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 rounded-xl hover:bg-cyan-600/40 transition flex items-center gap-1.5"
+                  >
+                    <span>🎓</span> Student Dashboard
+                  </Link>
+                )}
+
+                <div className="hidden sm:block text-right">
+                  <span className="text-xs font-bold text-slate-300 block">{user?.name}</span>
+                  <span className="text-[10px] text-slate-500 block uppercase font-mono">{user?.role}</span>
+                </div>
+
                 <button
                   type="button"
                   onClick={logout}
-                  className="text-xs text-slate-500 hover:text-slate-300"
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg transition cursor-pointer"
                 >
-                  Sign out
+                  Sign Out
                 </button>
-              </>
+              </div>
             ) : (
-              <>
+              <div className="flex items-center gap-2.5">
                 <Link
                   to="/login"
-                  className="px-3 py-1.5 text-sm text-slate-300 hover:text-white"
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition"
                 >
-                  Sign in
+                  Sign In
                 </Link>
                 <Link
                   to="/register"
-                  className="px-3 py-1.5 text-sm font-medium bg-cyan-600 rounded-lg hover:bg-cyan-500"
+                  className="px-4 py-2 text-xs font-bold bg-cyan-500 text-slate-950 rounded-xl hover:bg-cyan-400 shadow-md shadow-cyan-500/20 transition"
                 >
-                  Get started
+                  Create Account
                 </Link>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -85,23 +77,18 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="border-t border-slate-800 bg-slate-950 py-8 mt-12">
-        <div className="max-w-6xl mx-auto px-4 grid sm:grid-cols-3 gap-8 text-sm text-slate-400">
-          <div>
-            <p className="font-semibold text-white mb-2">SimLight</p>
-            <p>Decision-based business simulations for learning through play.</p>
-          </div>
-          <div>
-            <p className="font-semibold text-white mb-2">Explore</p>
-            <ul className="space-y-1">
-              <li><Link to="/browse" className="hover:text-cyan-400">All simulations</Link></li>
-              <li><Link to="/browse/financial-literacy" className="hover:text-cyan-400">Financial literacy</Link></li>
-              <li><Link to="/teach" className="hover:text-cyan-400">For faculty</Link></li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-semibold text-white mb-2">Create</p>
-            <p>Faculty build simulations in 7 steps with AI — then publish to your class or the marketplace.</p>
+      {/* Focused, Clean Footer */}
+      <footer className="border-t border-slate-850 bg-slate-950 py-8 text-xs text-slate-500">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p>© {new Date().getFullYear()} SimLight Platform · Decision-Driven Business Simulations (Capsim Inspired)</p>
+          <div className="flex items-center gap-4">
+            <Link to="/login" className="hover:text-cyan-400 transition">Sign In</Link>
+            <span>•</span>
+            <Link to="/register" className="hover:text-cyan-400 transition">Register</Link>
+            <span>•</span>
+            <Link to="/learn" className="hover:text-cyan-400 transition">Student Access</Link>
+            <span>•</span>
+            <Link to="/teach" className="hover:text-cyan-400 transition">Faculty Access</Link>
           </div>
         </div>
       </footer>

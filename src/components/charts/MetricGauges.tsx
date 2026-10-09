@@ -12,10 +12,11 @@ export function OdometerGauge({
   label: string
   unit?: string
   color?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
 }) {
   const pct = Math.min(1, Math.max(0, value / max))
-  const dims = size === 'sm' ? 72 : size === 'lg' ? 120 : 96
+  const dims =
+    size === 'sm' ? 72 : size === 'lg' ? 120 : size === 'xl' ? 152 : 96
   const r = dims * 0.36
   const cx = dims / 2
   const cy = dims * 0.55
@@ -32,22 +33,22 @@ export function OdometerGauge({
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
           fill="none"
           stroke="currentColor"
-          strokeWidth={size === 'sm' ? 6 : 8}
+          strokeWidth={size === 'sm' ? 6 : size === 'xl' ? 10 : 8}
           className="text-slate-200"
         />
         <path
           d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
           fill="none"
           stroke={color}
-          strokeWidth={size === 'sm' ? 6 : 8}
+          strokeWidth={size === 'sm' ? 6 : size === 'xl' ? 10 : 8}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}
         />
-        <text x={cx} y={cy - 4} textAnchor="middle" className="fill-slate-800 text-[11px] font-bold" fontSize={size === 'lg' ? 14 : 11}>
+        <text x={cx} y={cy - 4} textAnchor="middle" className="fill-slate-800 font-bold" fontSize={size === 'xl' ? 18 : size === 'lg' ? 14 : 11}>
           {display}
         </text>
       </svg>
-      <p className={`text-slate-600 font-medium ${size === 'sm' ? 'text-[10px]' : 'text-xs'}`}>{label}</p>
+      <p className={`text-slate-600 font-medium ${size === 'sm' ? 'text-[10px]' : size === 'xl' ? 'text-sm' : 'text-xs'}`}>{label}</p>
     </div>
   )
 }
@@ -96,7 +97,7 @@ export function SkillsPieChart({
         })}
         <circle r="10" cx="16" cy="16" fill="white" />
       </svg>
-      <ul className="text-xs space-y-1.5 flex-1 min-w-0">
+      <ul className={`space-y-2 flex-1 min-w-0 ${size >= 180 ? 'text-sm' : 'text-xs'}`}>
         {items.map((item, i) => (
           <li key={item.name} className="flex items-center gap-2">
             <span

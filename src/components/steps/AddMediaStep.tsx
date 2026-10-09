@@ -44,6 +44,8 @@ function UploadZone({
 export function AddMediaStep() {
   const { simulationId, state, setAssetsFromServer, setCurrentStep } = useSimulation()
   const [uploading, setUploading] = useState(false)
+  const [generatingScene, setGeneratingScene] = useState(false)
+  const [scenePrompt, setScenePrompt] = useState('')
   const [error, setError] = useState('')
 
   const images = state.assets.filter((a) => a.type === 'image')
@@ -75,6 +77,23 @@ export function AddMediaStep() {
     }
   }
 
+  const handleGenerateScene = async () => {
+    if (!simulationId) return
+    setGeneratingScene(true)
+    setError('')
+    try {
+      const { simulation } = await api.generateSceneVisual(
+        simulationId,
+        scenePrompt.trim() || undefined
+      )
+      setAssetsFromServer(simulation.assets)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scene generation failed')
+    } finally {
+      setGeneratingScene(false)
+    }
+  }
+
   return (
     <div className="rounded-2xl border-2 border-orange-200 bg-white overflow-hidden shadow-sm">
       <div className="bg-orange-600 px-6 py-3 flex items-center gap-2">
@@ -89,11 +108,36 @@ export function AddMediaStep() {
           <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
         )}
 
+        <section className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-violet-900">AI scene video (Hugging Face + fal.ai)</h3>
+          <p className="text-xs text-violet-800">
+            Generates a short scene clip from your prompt using{' '}
+            <code className="bg-white/70 px-1 rounded">Wan-AI/Wan2.2-TI2V-5B</code> via Hugging Face Inference.
+            The clip appears in the learner play corner panel next to the animated simulation world. Set{' '}
+            <code className="bg-white/70 px-1 rounded">HF_TOKEN</code> in .env (free token at huggingface.co/settings/tokens).
+          </p>
+          <textarea
+            value={scenePrompt}
+            onChange={(e) => setScenePrompt(e.target.value)}
+            rows={2}
+            placeholder={`Optional: custom prompt (default uses "${state.meta.title}" + ${state.meta.industry})`}
+            className="w-full px-3 py-2 border border-violet-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-400 outline-none resize-none bg-white"
+          />
+          <button
+            type="button"
+            onClick={handleGenerateScene}
+            disabled={generatingScene || uploading}
+            className="px-4 py-2.5 bg-violet-600 text-white text-sm font-semibold rounded-lg hover:bg-violet-700 disabled:opacity-50"
+          >
+            {generatingScene ? 'Generating video… (1–3 min)' : '✨ Generate scene video (HF)'}
+          </button>
+        </section>
+
         {sceneMedia && (
           <section className="rounded-xl border border-orange-200 bg-orange-50 p-4">
-            <h3 className="text-sm font-semibold text-orange-900 mb-2">Simulation scene preview</h3>
+            <h3 className="text-sm font-semibold text-orange-900 mb-2">Scene media preview</h3>
             <p className="text-xs text-orange-800 mb-3">
-              This {sceneMedia.type} plays as the background during preview and learner play.
+              Shows in the corner panel during play. The main view is always the animated simulation world.
             </p>
             <div className="aspect-video rounded-lg overflow-hidden bg-slate-900">
               {sceneMedia.type === 'video' ? (

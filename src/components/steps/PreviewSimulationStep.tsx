@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useSimulation } from '../../context/SimulationContext'
 import { getSceneMedia } from '../../utils/media'
-import { SceneMediaView } from '../media/SceneMediaView'
+import { AnimatedSimulationWorld, SceneMediaPiP } from '../player/AnimatedSimulationWorld'
+import { AssessmentPanel } from '../assessment/AssessmentPanel'
+import { getAssessmentType, ASSESSMENT_TYPE_LABELS } from '../../utils/assessment'
 
 export function PreviewSimulationStep() {
   const { state, setCurrentStep } = useSimulation()
@@ -41,42 +43,27 @@ export function PreviewSimulationStep() {
             </div>
           </div>
 
-          <div className="bg-white border-x border-slate-300 relative min-h-[280px] flex items-center justify-center overflow-hidden">
-            {sceneMedia ? (
-              <SceneMediaView
-                media={sceneMedia}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            ) : (
-              <>
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-200 via-slate-100 to-blue-100 opacity-60" />
-                <div className="relative text-center p-6">
-                  <div className="text-6xl mb-4">🏭</div>
-                  <p className="text-sm text-slate-500 max-w-md mx-auto">
-                    Isometric simulation environment — {state.meta.industry}
-                  </p>
-                </div>
-              </>
-            )}
+          <div className="bg-[#0a1628] border-x border-slate-300 relative min-h-[320px] overflow-hidden">
+            <AnimatedSimulationWorld
+              phaseName={currentPhase?.name}
+              industry={state.meta.industry}
+              eventTitle={currentEvent.title}
+              eventIndex={eventIndex}
+            />
+            {sceneMedia && <SceneMediaPiP media={sceneMedia} />}
 
-            <div className="absolute inset-x-4 bottom-4 bg-white rounded-xl shadow-xl border border-slate-200 p-5 max-w-lg mx-auto">
+            <div className="absolute inset-x-4 bottom-4 bg-white rounded-xl shadow-xl border border-slate-200 p-5 max-w-lg mx-auto z-10">
               <h4 className="font-semibold text-slate-900 mb-2">{currentEvent.title}</h4>
-              <p className="text-sm text-slate-600 mb-4">{currentEvent.description}</p>
-              <div className="space-y-2">
-                {currentEvent.decisions.map((d, i) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => {
-                      if (eventIndex < g.events.length - 1) setEventIndex(eventIndex + 1)
-                    }}
-                    className="w-full text-left px-4 py-2.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-sm transition-colors"
-                  >
-                    <span className="text-blue-600 font-medium mr-2">{i + 1}.</span>
-                    {d.text}
-                  </button>
-                ))}
-              </div>
+              <p className="text-sm text-slate-600 mb-2">{currentEvent.description}</p>
+              <p className="text-[10px] uppercase tracking-wide text-blue-600 font-semibold mb-3">
+                {ASSESSMENT_TYPE_LABELS[getAssessmentType(currentEvent)]}
+              </p>
+              <AssessmentPanel
+                event={currentEvent}
+                onSubmit={() => {
+                  if (eventIndex < g.events.length - 1) setEventIndex(eventIndex + 1)
+                }}
+              />
             </div>
           </div>
 

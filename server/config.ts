@@ -1,4 +1,8 @@
-import 'dotenv/config'
+import { config as loadEnv } from 'dotenv'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+loadEnv({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
 
 export type LlmProvider = 'openai' | 'anthropic' | 'nvidia' | 'groq' | 'mock'
 export type AiGenerationSource = LlmProvider
@@ -14,6 +18,9 @@ export const config = {
   groqApiKey: process.env.GROQ_API_KEY ?? '',
   groqModel: process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile',
   groqBaseUrl: process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1',
+  hfToken: process.env.HF_TOKEN ?? '',
+  hfVideoModel: process.env.HF_VIDEO_MODEL ?? 'Wan-AI/Wan2.2-TI2V-5B',
+  hfVideoProvider: (process.env.HF_VIDEO_PROVIDER ?? 'fal-ai') as 'fal-ai' | 'auto',
   llmProvider: (process.env.LLM_PROVIDER ?? 'auto') as 'auto' | LlmProvider,
   jwtSecret: process.env.JWT_SECRET ?? 'simlight-dev-secret-change-in-production',
   databaseUrl: process.env.DATABASE_URL ?? '',
@@ -68,6 +75,8 @@ export function getAiStatus() {
     anthropic: Boolean(config.anthropicApiKey),
     nvidia: Boolean(config.nvidiaApiKey),
     groq: Boolean(config.groqApiKey),
+    huggingface: Boolean(config.hfToken),
+    hfVideoModel: config.hfVideoModel,
     model,
     message:
       activeProvider === 'mock'

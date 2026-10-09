@@ -7,6 +7,8 @@ export function SimulationHud({
   xp,
   timeLeft,
   eventLabel,
+  onInfoClick,
+  infoActive,
 }: {
   budget: number
   risk: number
@@ -14,6 +16,8 @@ export function SimulationHud({
   xp: number
   timeLeft?: string
   eventLabel?: string
+  onInfoClick?: () => void
+  infoActive?: boolean
 }) {
   const chips = [
     { label: 'Budget', value: formatBudgetCr(budget), icon: '💰', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
@@ -24,12 +28,27 @@ export function SimulationHud({
   ]
 
   return (
-    <div className="bg-[#0a1628]/95 border-b border-[#1e3a5f] px-4 py-3">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div className="bg-[#0a1628]/95 border-b border-[#1e3a5f] px-4 py-3 shrink-0">
+      <div className="w-full flex flex-wrap items-center justify-between gap-3">
         {eventLabel && (
-          <p className="text-xs text-slate-400 w-full sm:w-auto">{eventLabel}</p>
+          <p className="text-xs text-slate-400 w-full sm:w-auto truncate">{eventLabel}</p>
         )}
-        <div className="flex flex-wrap gap-2 flex-1 justify-end">
+        <div className="flex flex-wrap items-center gap-2 flex-1 justify-end">
+          {onInfoClick && (
+            <button
+              type="button"
+              onClick={onInfoClick}
+              aria-label="Event information"
+              title="Event information"
+              className={`w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold italic shrink-0 transition-colors ${
+                infoActive
+                  ? 'bg-cyan-500 text-white border-cyan-400'
+                  : 'bg-[#1e3a5f]/80 text-cyan-300 border-[#2a4a6f] hover:bg-[#2a4a6f] hover:text-white'
+              }`}
+            >
+              i
+            </button>
+          )}
           {chips.map((c) => (
             <div
               key={c.label}
@@ -51,11 +70,15 @@ export function SimulationHudFromSession({
   timeLeft,
   totalEvents,
   title,
+  onInfoClick,
+  infoActive,
 }: {
   session: { budget: number; risk: number; score: number; currentEventIndex: number; decisionsMade: { points: number }[]; completed: boolean }
   timeLeft?: string
   totalEvents: number
   title: string
+  onInfoClick?: () => void
+  infoActive?: boolean
 }) {
   const xp = session.decisionsMade.reduce((s, d) => s + d.points, 0) + (session.completed ? 150 : 0)
   return (
@@ -66,6 +89,8 @@ export function SimulationHudFromSession({
       xp={xp}
       timeLeft={timeLeft}
       eventLabel={`${title} · Event ${Math.min(session.currentEventIndex + 1, totalEvents)}/${totalEvents}`}
+      onInfoClick={onInfoClick}
+      infoActive={infoActive}
     />
   )
 }

@@ -19,6 +19,8 @@ import {
   weightedFinalScore,
 } from './services/scoring.js'
 import { sendAssignmentEmail } from './services/email.js'
+import { generateSceneVideoWithHf, isHfSceneConfigured } from './services/hfScene.js'
+import { resolveDecisionFromPayload, type DecidePayload } from './services/assessment.js'
 import type { SimulationRecord } from '../src/types/simulation.js'
 
 export const router = Router()
@@ -58,12 +60,19 @@ router.get('/:id/assignments', requireAuth, requireFaculty, async (req: AuthedRe
   res.json(await store.listAssignments(sim.id, req.auth!.orgId))
 })
 
+router.post('/:id/report-config', requireAuth, requireFaculty, async (req: AuthedRequest, res) => {
+  const updated = await store.updateReportConfig(req.params.id, req.auth!.orgId, req.body)
+  if (!updated) return res.status(404).json({ error: 'Simulation not found' })
+  res.json(updated)
+})
+
 router.post('/:id/assignments', requireAuth, requireFaculty, async (req: AuthedRequest, res) => {
-  const { learnerName, learnerEmail, dueDate, sendEmail } = req.body as {
+  const { learnerName, learnerEmail, dueDate, sendEmail, regNumber } = req.body as {
     learnerName?: string
     learnerEmail?: string
     dueDate?: string
     sendEmail?: boolean
+    regNumber?: string
   }
   if (!learnerName?.trim()) return res.status(400).json({ error: 'learnerName is required' })
 
@@ -71,12 +80,15 @@ router.post('/:id/assignments', requireAuth, requireFaculty, async (req: AuthedR
     learnerName: learnerName.trim(),
     learnerEmail,
     dueDate,
+    regNumber: regNumber?.trim(),
   })
   if (!assignment) return res.status(400).json({ error: 'Simulation must be published' })
 
   const sim = await store.getSimulation(req.params.id, { orgId: req.auth!.orgId })
   const baseUrl = process.env.APP_URL ?? 'http://localhost:5173'
-  const playUrl = `${baseUrl}/play/${req.params.id}?assignment=${assignment.id}&name=${encodeURIComponent(learnerName)}`
+  const isV2 = Boolean(sim?.v2Data)
+  const pathPrefix = isV2 ? '/v2/play' : '/play'
+  const playUrl = `${baseUrl}${pathPrefix}/${req.params.id}?assignment=${assignment.id}&name=${encodeURIComponent(learnerName)}&regNumber=${encodeURIComponent(regNumber ?? '')}`
 
   if (sendEmail !== false && learnerEmail) {
     await sendAssignmentEmail({
@@ -226,6 +238,27 @@ router.post('/:id/generate-questions', requireAuth, requireFaculty, async (req: 
   }
 })
 
+router.post('/:id/generate-scene', requireAuth, requireFaculty, async (req: AuthedRequest, res) => {
+  const sim = await store.getSimulation(req.params.id, { orgId: req.auth!.orgId })
+  if (!sim) return res.status(404).json({ error: 'Simulation not found' })
+  if (!isHfSceneConfigured()) {
+    return res.status(400).json({ error: 'HF_TOKEN is not configured in .env' })
+  }
+  const { prompt } = req.body as { prompt?: string }
+  try {
+    const file = await generateSceneVideoWithHf(sim.meta, prompt)
+    const asset = await store.addAsset(req.params.id, req.auth!.orgId, file, file.assetType)
+    if (!asset) return res.status(500).json({ error: 'Failed to save generated scene' })
+    res.status(201).json({
+      asset,
+      prompt: file.prompt,
+      simulation: await store.getSimulation(req.params.id, { orgId: req.auth!.orgId }),
+    })
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Scene generation failed' })
+  }
+})
+
 router.post('/:id/generate-content-blocks', requireAuth, requireFaculty, async (req: AuthedRequest, res) => {
   const sim = await store.getSimulation(req.params.id, { orgId: req.auth!.orgId })
   if (!sim?.generated) return res.status(404).json({ error: 'Simulation not found' })
@@ -288,12 +321,13 @@ router.get('/:id/play-meta', async (req, res) => {
 })
 
 router.post('/:id/sessions', async (req, res) => {
-  const { learnerName, assignmentId, userId, playToken, resumeSessionId } = req.body as {
+  const { learnerName, assignmentId, userId, playToken, resumeSessionId, regNumber } = req.body as {
     learnerName?: string
     assignmentId?: string
     userId?: string
     playToken?: string
     resumeSessionId?: string
+    regNumber?: string
   }
 
   const sim = await store.getSimulation(req.params.id, { allowPublic: true })
@@ -317,7 +351,13 @@ router.post('/:id/sessions', async (req, res) => {
   }
 
   if (!learnerName?.trim()) return res.status(400).json({ error: 'learnerName is required' })
-  const session = await store.createSession(req.params.id, learnerName.trim(), assignmentId, userId)
+  const session = await store.createSession(
+    req.params.id,
+    learnerName.trim(),
+    assignmentId,
+    userId,
+    regNumber?.trim()
+  )
   if (!session) return res.status(400).json({ error: 'Cannot start session' })
 
   const { roomCode } = req.body as { roomCode?: string }
@@ -375,6 +415,34 @@ sessionsRouter.get('/:sessionId', async (req, res) => {
   res.json({ session, simulation: sim as SimulationRecord })
 })
 
+sessionsRouter.get('/:sessionId/report', async (req, res) => {
+  const report = await store.getSessionReport(req.params.sessionId)
+  if (!report) return res.status(404).json({ error: 'Report not found' })
+  res.json(report)
+})
+
+sessionsRouter.post('/:sessionId/v2-complete', async (req, res) => {
+  const { history, scorecard, score, variables, completed } = req.body as {
+    history?: any[]
+    scorecard?: any
+    score?: number
+    variables?: Record<string, number>
+    completed?: boolean
+  }
+  const session = await store.getSession(req.params.sessionId)
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+
+  const updated = await store.updateSession(session.id, {
+    score: score ?? session.score,
+    roundHistory: history ?? session.roundHistory,
+    scorecard: scorecard ?? session.scorecard,
+    metricScores: variables ?? session.metricScores,
+    completed: completed ?? true,
+    completedAt: new Date().toISOString(),
+  })
+  res.json({ session: updated })
+})
+
 sessionsRouter.post('/:sessionId/decide', async (req, res) => {
   const session = await store.getSession(req.params.sessionId)
   if (!session) return res.status(404).json({ error: 'Session not found' })
@@ -386,17 +454,30 @@ sessionsRouter.post('/:sessionId/decide', async (req, res) => {
   const sim = await store.getSimulation(session.simulationId, { allowPublic: true })
   if (!sim?.generated) return res.status(400).json({ error: 'Invalid simulation' })
 
-  const { decisionId } = req.body as { decisionId?: string }
   const event = sim.generated.events[session.currentEventIndex]
   if (!event) return res.status(400).json({ error: 'No current event' })
-  const decision = event.decisions.find((d) => d.id === decisionId)
-  if (!decision) return res.status(400).json({ error: 'Invalid decision' })
 
-  const decisionIndex = event.decisions.findIndex((d) => d.id === decisionId)
+  let decisionIndex: number
+  let decisionId: string
+  let feedbackText: string
+  try {
+    const resolved = resolveDecisionFromPayload(event, req.body as DecidePayload)
+    decisionIndex = resolved.decisionIndex
+    decisionId = resolved.decisionId
+    feedbackText = resolved.feedbackText
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Invalid decision'
+    return res.status(400).json({ error: message })
+  }
+
+  const decision = event.decisions.find((d) => d.id === decisionId) ?? {
+    id: decisionId,
+    text: feedbackText,
+  }
   const metrics = sim.generated.metrics
   const metricDeltas = computeMetricDeltas(event, decisionIndex, metrics)
   const points = computeDecisionPoints(event, decisionIndex, metricDeltas)
-  const aiFeedback = await generateAiFeedback(sim, event, decision.text, metricDeltas)
+  const aiFeedback = await generateAiFeedback(sim, event, feedbackText, metricDeltas)
   const metricScores = mergeMetricScores(session.metricScores ?? {}, metricDeltas)
 
   const budgetDelta = event.impact.budget === 'Down' ? -5 : event.impact.budget === 'Up' ? 3 : 0

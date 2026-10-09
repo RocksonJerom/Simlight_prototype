@@ -30,14 +30,14 @@ export function TeamPage() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10">
           <Link to="/teach" className="text-sm text-slate-500 hover:text-slate-700">← Dashboard</Link>
           <h1 className="text-xl font-bold text-slate-900 mt-1">Invite Team Members</h1>
           <p className="text-sm text-slate-500">Add faculty or learners to your organization</p>
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8">
+      <main className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10 py-8">
         <form onSubmit={handleInvite} className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Name</span>

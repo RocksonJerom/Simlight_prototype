@@ -4,6 +4,7 @@ import cors from 'cors'
 import { router as simulationsRouter, sessionsRouter, aiRouter, marketplaceRouter, roomsRouter } from './routes.js'
 import { platformRouter } from './platform/routes.js'
 import { authRouter } from './auth/routes.js'
+import { v2Router } from './v2/routes.js'
 import { UPLOADS_DIR } from './database.js'
 import { initStore, getDbKind } from './store/index.js'
 import { getAiStatus } from './config.js'
@@ -29,6 +30,7 @@ app.use('/api/simulations', simulationsRouter)
 app.use('/api/sessions', sessionsRouter)
 app.use('/api/rooms', roomsRouter)
 app.use('/api/platform', platformRouter)
+app.use('/api/v2', v2Router)
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   res.status(400).json({ error: err.message })
@@ -39,4 +41,9 @@ app.listen(PORT, () => {
   console.log(`SimLight API v5 running at http://localhost:${PORT}`)
   console.log(`Database: ${getDbKind()}`)
   console.log(`AI: ${ai.message}`)
+  console.log(
+    ai.huggingface
+      ? `HF video: configured (${ai.hfVideoModel})`
+      : 'HF video: HF_TOKEN not set in .env'
+  )
 })

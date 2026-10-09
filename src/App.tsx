@@ -21,6 +21,9 @@ import { LeadsPage, CreateLeadPage } from './pages/platform/LeadsPage'
 import { ConvertLeadPage } from './pages/platform/ConvertLeadPage'
 import { OrganizationsPage, CoursesPage, TaglinesPage, SimJobRolesPage } from './pages/platform/CatalogPages'
 import { OrgDashboardPage, OrgProfilePage } from './pages/platform/OrgPages'
+import { V2PlayPage } from './pages/v2/V2PlayPage'
+import { V2CreatorPage } from './pages/v2/V2CreatorPage'
+import { PerformanceReportPage } from './pages/PerformanceReportPage'
 
 function App() {
   return (
@@ -40,6 +43,13 @@ function App() {
 
           <Route path="/play/:id" element={<PlayLandingPage />} />
           <Route path="/session/:sessionId" element={<LearnerPlayerPage />} />
+          <Route path="/report/:sessionId" element={<PerformanceReportPage />} />
+
+          {/* SimLight V2 Decision-Driven Engine */}
+          <Route path="/v2/play" element={<V2PlayPage />} />
+          <Route path="/v2/play/:id" element={<V2PlayPage />} />
+          <Route path="/v2/creator" element={<V2CreatorPage />} />
+          <Route path="/v2/creator/:id" element={<V2CreatorPage />} />
 
           <Route path="/learner" element={<Navigate to="/learn" replace />} />
 

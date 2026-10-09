@@ -48,7 +48,7 @@ export function BrowsePage() {
 
   return (
     <PublicLayout>
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="w-full max-w-[min(100%,90rem)] mx-auto px-4 sm:px-6 lg:px-10 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">
             {activeCategory.icon} {activeCategory.name}

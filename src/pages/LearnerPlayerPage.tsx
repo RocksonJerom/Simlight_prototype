@@ -7,9 +7,10 @@ import { ContentBlocksView } from '../components/content/ContentBlocksView'
 import { SimulationHudFromSession } from '../components/player/SimulationHud'
 import { MetricsSidebar } from '../components/player/MetricsSidebar'
 import { SimulationScene } from '../components/player/SimulationScene'
-import { DecisionCards } from '../components/player/DecisionCards'
+import { AssessmentPanel, type AssessmentResponse } from '../components/assessment/AssessmentPanel'
 import { AiFeedbackPanel } from '../components/player/AiFeedbackPanel'
 import { CompletionReport } from '../components/player/CompletionReport'
+import { PageContainer } from '../components/layout/PageContainer'
 import { feedbackQualityScore, progressPercent } from '../utils/player'
 
 function formatTimeLeft(expiresAt?: string): string {
@@ -19,6 +20,11 @@ function formatTimeLeft(expiresAt?: string): string {
   const m = Math.floor(ms / 60000)
   const s = Math.floor((ms % 60000) / 1000)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function isSessionExpired(expiresAt?: string): boolean {
+  if (!expiresAt) return false
+  return new Date(expiresAt).getTime() <= Date.now()
 }
 
 export function LearnerPlayerPage() {
@@ -31,7 +37,9 @@ export function LearnerPlayerPage() {
   const [lastMetricDeltas, setLastMetricDeltas] = useState<Record<string, number> | null>(null)
   const [lastFeedbackScore, setLastFeedbackScore] = useState<number | null>(null)
   const [timeLeft, setTimeLeft] = useState('')
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [introDone, setIntroDone] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
 
   const load = useCallback(() => {
     if (!sessionId) return
@@ -49,6 +57,10 @@ export function LearnerPlayerPage() {
   useEffect(load, [load])
 
   useEffect(() => {
+    setInfoOpen(false)
+  }, [session?.currentEventIndex])
+
+  useEffect(() => {
     if (!session?.expiresAt || session.completed) return
     const tick = () => setTimeLeft(formatTimeLeft(session.expiresAt))
     tick()
@@ -56,18 +68,46 @@ export function LearnerPlayerPage() {
     return () => clearInterval(id)
   }, [session?.expiresAt, session?.completed])
 
-  const handleDecision = async (decisionId: string) => {
+  const handleAssessment = async (assessmentResponse: AssessmentResponse) => {
     if (!sessionId || submitting || !simulation?.generated) return
+    if (isSessionExpired(session?.expiresAt)) {
+      setSubmitError('Time limit exceeded. Start a new session to continue playing.')
+      return
+    }
     const currentEvent = simulation.generated.events[session!.currentEventIndex]
     if (!currentEvent) return
 
-    const decisionIndex = currentEvent.decisions.findIndex((d) => d.id === decisionId)
+    const options =
+      assessmentResponse.type === 'mcq' || assessmentResponse.type === 'chart'
+        ? assessmentResponse.type === 'chart'
+          ? currentEvent.assessment?.chartOptions ?? []
+          : currentEvent.decisions
+        : []
+    const decisionIndex =
+      assessmentResponse.type === 'mcq' || assessmentResponse.type === 'chart'
+        ? options.findIndex((d) => d.id === assessmentResponse.decisionId)
+        : 1
+
+    let payload: { decisionId: string } | { response: { text?: string; value?: string; blanks?: Record<string, string> } }
+    if (assessmentResponse.type === 'mcq' || assessmentResponse.type === 'chart') {
+      payload = { decisionId: assessmentResponse.decisionId }
+    } else if (assessmentResponse.type === 'text') {
+      payload = { response: { text: assessmentResponse.text } }
+    } else if (assessmentResponse.type === 'formula') {
+      payload = { response: { value: assessmentResponse.value } }
+    } else if (assessmentResponse.type === 'fill_blank') {
+      payload = { response: { blanks: assessmentResponse.blanks } }
+    } else {
+      payload = { response: {} }
+    }
+
     setSubmitting(true)
+    setSubmitError(null)
 
     try {
       const { session: s, simulation: sim, aiFeedback, metricDeltas } = await api.makeDecision(
         sessionId,
-        decisionId
+        payload
       )
       setSession(s)
       setSimulation(sim)
@@ -75,10 +115,12 @@ export function LearnerPlayerPage() {
         setLastFeedback(aiFeedback)
         setLastMetricDeltas(metricDeltas ?? null)
         setLastFeedbackScore(
-          feedbackQualityScore(decisionIndex, currentEvent.decisions.length, metricDeltas)
+          feedbackQualityScore(decisionIndex >= 0 ? decisionIndex : 1, Math.max(options.length, 3), metricDeltas)
         )
       }
     } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not submit your answer'
+      setSubmitError(message)
       console.error(e)
     } finally {
       setSubmitting(false)
@@ -121,6 +163,7 @@ export function LearnerPlayerPage() {
   const progressPct = lastFeedback
     ? progressPercent({ ...session, currentEventIndex: session.currentEventIndex }, events.length)
     : progressPercent(session, events.length)
+  const timeExpired = isSessionExpired(session.expiresAt)
 
   const showIntro =
     !introDone && session.currentEventIndex === 0 && session.decisionsMade.length === 0
@@ -135,24 +178,24 @@ export function LearnerPlayerPage() {
             AI-Powered Interactive Simulation · {simulation.meta.duration}
           </p>
         </header>
-        <div className="flex-1 max-w-5xl mx-auto w-full p-8 grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="font-bold text-slate-900 mb-2">Scenario</h2>
-            <p className="text-sm text-slate-600 leading-relaxed">{simulation.generated.scenario}</p>
-            <h3 className="font-bold text-slate-900 mt-6 mb-2">Learning objectives</h3>
-            <ul className="text-sm text-slate-600 space-y-1 list-disc pl-5">
+        <PageContainer className="flex-1 py-6 sm:py-10 grid md:grid-cols-2 gap-6 lg:gap-10">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-3">Scenario</h2>
+            <p className="text-base text-slate-600 leading-relaxed">{simulation.generated.scenario}</p>
+            <h3 className="text-lg font-bold text-slate-900 mt-6 mb-3">Learning objectives</h3>
+            <ul className="text-base text-slate-600 space-y-2 list-disc pl-5">
               {simulation.meta.learningObjectives.map((o) => (
                 <li key={o}>{o}</li>
               ))}
             </ul>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="font-bold text-slate-900 mb-4">Journey</h2>
-            <ol className="space-y-2">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Journey</h2>
+            <ol className="space-y-3">
               {simulation.generated.phases.map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl text-sm font-semibold text-slate-700"
+                  className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl text-base font-semibold text-slate-700"
                 >
                   <span className="w-8 h-8 rounded-full bg-[#eef7fc] text-[#005b7f] flex items-center justify-center text-xs font-bold">
                     {p.order}
@@ -169,7 +212,7 @@ export function LearnerPlayerPage() {
               Begin Simulation →
             </button>
           </div>
-        </div>
+        </PageContainer>
       </div>
     )
   }
@@ -186,41 +229,59 @@ export function LearnerPlayerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1628] flex flex-col">
+    <div className="h-screen bg-[#0a1628] flex flex-col overflow-hidden">
       <SimulationHudFromSession
         session={session}
         timeLeft={session.expiresAt ? timeLeft || formatTimeLeft(session.expiresAt) : undefined}
         totalEvents={events.length}
         title={simulation.meta.title}
+        onInfoClick={() => setInfoOpen((open) => !open)}
+        infoActive={infoOpen}
       />
 
-      <div className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full">
-        <div className="flex-1 flex flex-col min-w-0">
-          <SimulationScene phaseName={currentPhase?.name} sceneMedia={sceneMedia} event={currentEvent}>
+      <div className="flex-1 flex flex-col lg:flex-row w-full min-h-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
+          <SimulationScene
+            phaseName={currentPhase?.name}
+            industry={simulation.meta.industry}
+            sceneMedia={sceneMedia}
+            event={currentEvent}
+            eventIndex={displayEventIndex}
+            showInfo={infoOpen}
+            onCloseInfo={() => setInfoOpen(false)}
+          >
             {lastFeedback && lastFeedbackScore !== null && (
-              <div className="mt-4">
-                <AiFeedbackPanel
-                  score={lastFeedbackScore}
-                  feedback={lastFeedback}
-                  metricDeltas={lastMetricDeltas ?? undefined}
-                  metricNames={metricNames}
-                  onDismiss={dismissFeedback}
-                />
-              </div>
+              <AiFeedbackPanel
+                score={lastFeedbackScore}
+                feedback={lastFeedback}
+                metricDeltas={lastMetricDeltas ?? undefined}
+                metricNames={metricNames}
+                onDismiss={dismissFeedback}
+              />
             )}
           </SimulationScene>
 
           {currentEvent && !lastFeedback && (
-            <div className="bg-white p-6 border-t border-slate-200">
-              <ContentBlocksView blocks={currentEvent.contentBlocks} className="mb-5" />
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                What will you do?
-              </h4>
-              <DecisionCards
-                decisions={currentEvent.decisions}
-                onSelect={handleDecision}
-                disabled={submitting}
-              />
+            <div className="bg-white border-t border-slate-200 shrink-0 max-h-[42vh] overflow-y-auto">
+              <div className="p-5 sm:p-8 w-full">
+                {timeExpired && (
+                  <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <strong>Time&apos;s up.</strong> This session can no longer accept decisions. Go back to the
+                    simulation page and start a new run to finish.
+                  </div>
+                )}
+                {submitError && !timeExpired && (
+                  <div className="mb-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+                    {submitError}
+                  </div>
+                )}
+                <ContentBlocksView blocks={currentEvent.contentBlocks} className="mb-5" />
+                <AssessmentPanel
+                  event={currentEvent}
+                  onSubmit={handleAssessment}
+                  disabled={submitting || timeExpired}
+                />
+              </div>
             </div>
           )}
         </div>

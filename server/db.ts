@@ -22,6 +22,8 @@ interface SimRow {
   created_by: string | null
   meta: string
   generated: string | null
+  v2_data: string | null
+  report_config: string | null
   scoring_type: string
   visibility: string
   is_published: number
@@ -70,6 +72,8 @@ function rowToSimulation(row: SimRow): SimulationRecord {
     createdBy: row.created_by ?? '',
     meta: JSON.parse(row.meta) as SimulationMeta,
     generated: row.generated ? JSON.parse(row.generated) : null,
+    v2Data: row.v2_data ? JSON.parse(row.v2_data) : undefined,
+    reportConfig: row.report_config ? JSON.parse(row.report_config) : undefined,
     assets: loadAssets(row.id),
     scoringType: row.scoring_type as SimulationRecord['scoringType'],
     visibility: row.visibility as SimulationRecord['visibility'],
@@ -90,12 +94,15 @@ function rowToSession(row: Record<string, unknown>): PlaySession {
     assignmentId: (row.assignment_id as string) ?? undefined,
     userId: (row.user_id as string) ?? undefined,
     learnerName: row.learner_name as string,
+    regNumber: (row.reg_number as string) ?? undefined,
     currentEventIndex: row.current_event_index as number,
     score: row.score as number,
     budget: row.budget as number,
     risk: row.risk as number,
     metricScores: JSON.parse((row.metric_scores as string) || '{}'),
-    decisionsMade: JSON.parse(row.decisions_made as string),
+    decisionsMade: JSON.parse((row.decisions_made as string) || '[]'),
+    roundHistory: row.round_history ? JSON.parse(row.round_history as string) : undefined,
+    scorecard: row.scorecard ? JSON.parse(row.scorecard as string) : undefined,
     completed: (row.completed as number) === 1,
     startedAt: row.started_at as string,
     completedAt: (row.completed_at as string) ?? undefined,
@@ -120,6 +127,7 @@ function rowToAssignment(row: Record<string, unknown>): Assignment {
     simulationId: row.simulation_id as string,
     learnerName: row.learner_name as string,
     learnerEmail: (row.learner_email as string) ?? undefined,
+    regNumber: (row.reg_number as string) ?? undefined,
     userId: (row.user_id as string) ?? undefined,
     assignedAt: row.assigned_at as string,
     dueDate: (row.due_date as string) ?? undefined,
@@ -153,21 +161,53 @@ export function getSimulation(
 }
 
 export function createSimulation(
-  meta: Partial<SimulationMeta> | undefined,
-  orgId: string,
-  userId: string
+  meta: (Partial<SimulationMeta> & { v2Data?: any }) | undefined,
+  orgId: string = 'default-org',
+  userId: string = 'default-user',
+  v2DataParam?: any
 ): SimulationRecord {
   const db = getDatabase()
   const now = new Date().toISOString()
-  const id = randomUUID()
+  const v2Data = v2DataParam || meta?.v2Data
+  const id = v2Data?.id || randomUUID()
   const fullMeta = { ...defaultMeta, ...meta }
+  if (v2Data?.title && !meta?.title) {
+    fullMeta.title = v2Data.title
+  }
+  if (v2Data?.industry && !meta?.industry) {
+    fullMeta.industry = v2Data.industry
+  }
+  if (v2Data?.difficulty && !meta?.difficulty) {
+    fullMeta.difficulty = v2Data.difficulty
+  }
+  if (v2Data?.duration && !meta?.duration) {
+    fullMeta.duration = v2Data.duration
+  }
 
   db.prepare(`
-    INSERT INTO simulations (id, org_id, created_by, meta, generated, scoring_type, visibility, is_published, ai_generation_complete, created_at, updated_at)
-    VALUES (?, ?, ?, ?, NULL, 'ai-assisted', 'organization', 0, 0, ?, ?)
-  `).run(id, orgId, userId, JSON.stringify(fullMeta), now, now)
+    INSERT INTO simulations (id, org_id, created_by, meta, generated, v2_data, scoring_type, visibility, is_published, ai_generation_complete, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, ?, 'ai-assisted', 'organization', ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      org_id = excluded.org_id,
+      created_by = excluded.created_by,
+      meta = excluded.meta,
+      v2_data = excluded.v2_data,
+      is_published = excluded.is_published,
+      ai_generation_complete = excluded.ai_generation_complete,
+      updated_at = excluded.updated_at
+  `).run(
+    id,
+    orgId,
+    userId,
+    JSON.stringify(fullMeta),
+    v2Data ? JSON.stringify(v2Data) : null,
+    v2Data ? 1 : 0,
+    v2Data ? 1 : 0,
+    now,
+    now
+  )
 
-  return getSimulation(id, { orgId })!
+  return getSimulation(id, { orgId }) || getSimulation(id)!
 }
 
 export function updateSimulation(
@@ -184,7 +224,7 @@ export function updateSimulation(
   getDatabase()
     .prepare(`
       UPDATE simulations SET
-        meta = ?, generated = ?, scoring_type = ?, visibility = ?,
+        meta = ?, generated = ?, v2_data = ?, scoring_type = ?, visibility = ?,
         is_published = ?, ai_generation_complete = ?, ai_generation_source = ?,
         play_token = ?, version = ?, updated_at = ?
       WHERE id = ?
@@ -192,6 +232,7 @@ export function updateSimulation(
     .run(
       JSON.stringify(merged.meta),
       merged.generated ? JSON.stringify(merged.generated) : null,
+      merged.v2Data ? JSON.stringify(merged.v2Data) : null,
       merged.scoringType,
       merged.visibility,
       merged.isPublished ? 1 : 0,
@@ -275,9 +316,10 @@ export function deleteAsset(assetId: string): boolean {
 export function createAssignment(
   simulationId: string,
   orgId: string,
-  data: { learnerName: string; learnerEmail?: string; dueDate?: string }
+  data: { learnerName: string; learnerEmail?: string; dueDate?: string; regNumber?: string }
 ): Assignment | null {
-  if (!getSimulation(simulationId, { orgId })?.isPublished) return null
+  const sim = getSimulation(simulationId, { orgId })
+  if (!sim) return null
 
   const id = randomUUID()
   const inviteToken = randomUUID()
@@ -285,10 +327,19 @@ export function createAssignment(
 
   getDatabase()
     .prepare(`
-      INSERT INTO assignments (id, simulation_id, learner_name, learner_email, assigned_at, due_date, status, invite_token)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+      INSERT INTO assignments (id, simulation_id, learner_name, learner_email, reg_number, assigned_at, due_date, status, invite_token)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     `)
-    .run(id, simulationId, data.learnerName, data.learnerEmail ?? null, now, data.dueDate ?? null, inviteToken)
+    .run(
+      id,
+      simulationId,
+      data.learnerName,
+      data.learnerEmail ?? null,
+      data.regNumber ?? null,
+      now,
+      data.dueDate ?? null,
+      inviteToken
+    )
 
   return getAssignment(id)
 }
@@ -310,15 +361,21 @@ export function createSession(
   simulationId: string,
   learnerName: string,
   assignmentId?: string,
-  userId?: string
+  userId?: string,
+  regNumber?: string
 ): PlaySession | null {
   const sim = getSimulation(simulationId, { allowPublic: true })
-  if (!sim?.isPublished || !sim.generated) return null
+  if (!sim) return null
+  if (!sim.generated && !sim.v2Data) return null
 
+  let effectiveRegNumber = regNumber
   if (assignmentId) {
     const assignment = getAssignment(assignmentId)
     if (!assignment || assignment.simulationId !== simulationId) return null
     if (assignment.dueDate && new Date(assignment.dueDate) < new Date()) return null
+    if (!effectiveRegNumber && assignment.regNumber) {
+      effectiveRegNumber = assignment.regNumber
+    }
   }
 
   const id = randomUUID()
@@ -328,10 +385,20 @@ export function createSession(
 
   getDatabase()
     .prepare(`
-      INSERT INTO sessions (id, simulation_id, assignment_id, user_id, learner_name, current_event_index, score, budget, risk, metric_scores, decisions_made, completed, started_at, time_limit_seconds, expires_at)
-      VALUES (?, ?, ?, ?, ?, 0, 0, 100, 20, '{}', '[]', 0, ?, ?, ?)
+      INSERT INTO sessions (id, simulation_id, assignment_id, user_id, learner_name, reg_number, current_event_index, score, budget, risk, metric_scores, decisions_made, round_history, scorecard, completed, started_at, time_limit_seconds, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0, 100, 20, '{}', '[]', '[]', NULL, 0, ?, ?, ?)
     `)
-    .run(id, simulationId, assignmentId ?? null, userId ?? null, learnerName, now, timeLimitSeconds, expiresAt)
+    .run(
+      id,
+      simulationId,
+      assignmentId ?? null,
+      userId ?? null,
+      learnerName,
+      effectiveRegNumber ?? null,
+      now,
+      timeLimitSeconds,
+      expiresAt
+    )
 
   if (assignmentId) {
     getDatabase()
@@ -359,20 +426,23 @@ export function updateSession(
   getDatabase()
     .prepare(`
       UPDATE sessions SET
-        assignment_id = ?, user_id = ?, learner_name = ?, current_event_index = ?, score = ?, budget = ?, risk = ?,
-        metric_scores = ?, decisions_made = ?, completed = ?, completed_at = ?
+        assignment_id = ?, user_id = ?, learner_name = ?, reg_number = ?, current_event_index = ?, score = ?, budget = ?, risk = ?,
+        metric_scores = ?, decisions_made = ?, round_history = ?, scorecard = ?, completed = ?, completed_at = ?
       WHERE id = ?
     `)
     .run(
       merged.assignmentId ?? null,
       merged.userId ?? null,
       merged.learnerName,
+      merged.regNumber ?? null,
       merged.currentEventIndex,
       merged.score,
       merged.budget,
       merged.risk,
       JSON.stringify(merged.metricScores ?? {}),
-      JSON.stringify(merged.decisionsMade),
+      JSON.stringify(merged.decisionsMade ?? []),
+      merged.roundHistory ? JSON.stringify(merged.roundHistory) : null,
+      merged.scorecard ? JSON.stringify(merged.scorecard) : null,
       merged.completed ? 1 : 0,
       merged.completedAt ?? null,
       id
@@ -392,6 +462,291 @@ export function listSessionsForSimulation(simulationId: string): PlaySession[] {
     .prepare('SELECT * FROM sessions WHERE simulation_id = ? ORDER BY started_at DESC')
     .all(simulationId)
   return rows.map((r) => rowToSession(r as Record<string, unknown>))
+}
+
+export function getSessionReport(sessionId: string) {
+  const session = getSession(sessionId)
+  if (!session) return null
+
+  const sim = getSimulation(session.simulationId, { allowPublic: true })
+  const assignment = session.assignmentId ? getAssignment(session.assignmentId) : null
+
+  // Participant details
+  const regNumber = session.regNumber || assignment?.regNumber || `REG-${session.id.slice(0, 6).toUpperCase()}`
+  let studentEmail = assignment?.learnerEmail
+  if (!studentEmail && session.userId) {
+    const userRow = getDatabase().prepare('SELECT email FROM users WHERE id = ?').get(session.userId) as { email: string } | undefined
+    if (userRow) studentEmail = userRow.email
+  }
+
+  const learner = {
+    name: session.learnerName,
+    regNumber,
+    email: studentEmail,
+  }
+
+  // Simulation details
+  const isV2 = Boolean(sim?.v2Data || (session.roundHistory && session.roundHistory.length > 0))
+  const simulationInfo = {
+    id: sim?.id ?? session.simulationId,
+    title: sim?.meta?.title ?? sim?.v2Data?.title ?? 'Strategic Business Simulation',
+    industry: sim?.meta?.industry ?? sim?.v2Data?.industry ?? 'Enterprise Operations',
+    difficulty: sim?.meta?.difficulty ?? sim?.v2Data?.difficulty ?? 'Intermediate',
+    duration: sim?.meta?.duration ?? sim?.v2Data?.duration ?? '30 mins',
+    companyName: sim?.v2Data?.companyName ?? sim?.meta?.title ?? 'Apex Enterprises',
+    companyOverview:
+      sim?.v2Data?.companyOverview ??
+      sim?.generated?.scenario ??
+      'Enterprise multi-phase strategic business simulation assessing executive trade-offs.',
+    learningObjectives:
+      sim?.v2Data?.learningObjectives ??
+      sim?.meta?.learningObjectives ?? [
+        'Strategic Resource Allocation',
+        'Operational Efficiency & Margin Optimization',
+        'Risk Management under Uncertainty',
+      ],
+    variables: sim?.v2Data?.variables ?? [],
+    rounds: sim?.v2Data?.rounds ?? [],
+    isV2,
+  }
+
+  // Scorecard
+  let scorecard = session.scorecard
+  if (!scorecard) {
+    const metricEntries = Object.entries(session.metricScores ?? {})
+    const metrics = metricEntries.map(([id, val]) => {
+      const metricDef = sim?.generated?.metrics?.find((m) => m.id === id)
+      return {
+        id,
+        label: metricDef?.name ?? id,
+        unit: 'points',
+        initialValue: 50,
+        finalValue: Math.round(val),
+        change: Math.round(val - 50),
+        percentChange: Math.round(((val - 50) / 50) * 100),
+        status: (val >= 50 ? 'positive' : 'negative') as 'positive' | 'negative' | 'neutral',
+      }
+    })
+
+    scorecard = {
+      metrics: metrics.length
+        ? metrics
+        : [
+            {
+              id: 'score',
+              label: 'Overall Performance',
+              unit: 'points',
+              initialValue: 0,
+              finalValue: session.score,
+              change: session.score,
+              percentChange: 100,
+              status: 'positive',
+            },
+            {
+              id: 'budget',
+              label: 'Budget Discipline',
+              unit: '%',
+              initialValue: 100,
+              finalValue: session.budget,
+              change: session.budget - 100,
+              percentChange: session.budget - 100,
+              status: session.budget > 40 ? 'positive' : 'negative',
+            },
+            {
+              id: 'risk',
+              label: 'Risk Containment',
+              unit: '%',
+              initialValue: 20,
+              finalValue: session.risk,
+              change: session.risk - 20,
+              percentChange: Math.round(((session.risk - 20) / 20) * 100),
+              status: session.risk < 50 ? 'positive' : 'negative',
+            },
+          ],
+      strategicArchetype:
+        session.score >= 80
+          ? 'High-Growth & Aggressive Optimizer'
+          : session.score >= 50
+            ? 'Balanced & Prudent Strategist'
+            : 'Strained Operations / High-Risk Exposure',
+      summary: `Completed simulation with final score of ${session.score}/100. Demonstrated strategic decision making with effective trade-off balancing across operational phases.`,
+      strengths:
+        session.score >= 50
+          ? [
+              'Effective resource management across operational phases',
+              'Disciplined budget utilization and cost control',
+              'Consistent focus on high-impact strategic priorities',
+            ]
+          : ['Maintained baseline operational continuity', 'Navigated complex trade-off decisions under stress'],
+      tradeOffsNoted:
+        session.risk > 40
+          ? ['Elevated risk exposure during aggressive capital allocation']
+          : ['Conservative spending limited maximum market growth upside'],
+    }
+  }
+
+  // Decision Insights
+  const decisionInsights: any[] = []
+  if (session.roundHistory && session.roundHistory.length > 0) {
+    session.roundHistory.forEach((r: any) => {
+      const roundDef = sim?.v2Data?.rounds?.find((rnd: any) => rnd.roundNumber === r.roundNumber)
+      decisionInsights.push({
+        roundNumber: r.roundNumber,
+        title: roundDef?.title ?? `Phase ${r.roundNumber}`,
+        decisions: r.decisions ?? {},
+        appliedConsequences: r.appliedConsequences ?? [],
+        tradeOffSummary: r.summaryTradeOff ?? 'Executed planned decisions.',
+      })
+    })
+  } else if (session.decisionsMade && session.decisionsMade.length > 0) {
+    session.decisionsMade.forEach((d, idx) => {
+      const event = sim?.generated?.events?.find((e) => e.id === d.eventId)
+      const decisionObj = event?.decisions?.find((dec) => dec.id === d.decisionId)
+      decisionInsights.push({
+        roundNumber: idx + 1,
+        title: event?.title ?? `Phase ${idx + 1}`,
+        decisions: { choice: decisionObj?.text ?? d.decisionId },
+        appliedConsequences: [
+          {
+            ruleId: `c_${idx}`,
+            ruleName: event?.title ?? 'Operational Policy',
+            narrative: d.aiFeedback ?? 'Standard operational execution.',
+            variableDeltas: Object.entries(d.metricDeltas ?? {}).map(([varId, delta]) => ({
+              variableId: varId,
+              variableLabel: varId,
+              delta,
+            })),
+          },
+        ],
+        tradeOffSummary: d.aiFeedback ?? `Awarded ${d.points} points for strategic decision.`,
+      })
+    })
+  }
+
+  // Cohort comparison
+  const allSessions = listSessionsForSimulation(session.simulationId).filter((s) => s.completed)
+  const totalParticipants = Math.max(allSessions.length, 1)
+  const sorted = [...allSessions].sort((a, b) => b.score - a.score)
+  const myIndex = sorted.findIndex((s) => s.id === session.id)
+  const rank = myIndex >= 0 ? myIndex + 1 : 1
+  const percentile = Math.min(100, Math.max(1, Math.round(((totalParticipants - rank + 1) / totalParticipants) * 100)))
+  const classAverageScore = Math.round(allSessions.reduce((sum, s) => sum + s.score, 0) / totalParticipants)
+  const highestScore = allSessions.length ? Math.max(...allSessions.map((s) => s.score)) : session.score
+  const medianScore = allSessions.length ? sorted[Math.floor(allSessions.length / 2)].score : session.score
+
+  const metricAverages: Record<string, number> = {}
+  if (scorecard.metrics) {
+    scorecard.metrics.forEach((m: any) => {
+      metricAverages[m.id] = m.finalValue
+    })
+  }
+
+  // Behavioral insights computation
+  let behaviorInsights = session.scorecard?.behaviorInsights
+  if (!behaviorInsights) {
+    let highRiskCount = 0
+    let conservativeCount = 0
+
+    if (session.roundHistory && session.roundHistory.length > 0) {
+      for (const r of session.roundHistory) {
+        for (const val of Object.values(r.decisions || {})) {
+          if (typeof val === 'number') {
+            if (val > 50) highRiskCount++
+            else if (val < 30) conservativeCount++
+          } else if (typeof val === 'string') {
+            const s = val.toLowerCase()
+            if (s.includes('aggressive') || s.includes('expand') || s.includes('automate') || s.includes('rush') || s.includes('dual')) {
+              highRiskCount++
+            } else if (s.includes('conservative') || s.includes('delay') || s.includes('contain') || s.includes('maintain') || s.includes('single')) {
+              conservativeCount++
+            }
+          }
+        }
+      }
+    } else if (session.decisionsMade && session.decisionsMade.length > 0) {
+      session.decisionsMade.forEach((d) => {
+        if (d.points >= 70) highRiskCount++
+        else conservativeCount++
+      })
+    }
+
+    let riskProfile = 'Prudent & Balanced Strategist'
+    if (highRiskCount > conservativeCount + 1) {
+      riskProfile = 'Aggressive Growth Risk-Taker'
+    } else if (conservativeCount > highRiskCount + 1) {
+      riskProfile = 'Risk-Averse Capital Guardian'
+    }
+
+    let capitalStyle = 'Balanced Value Optimizer'
+    const cashMetric = scorecard?.metrics?.find((m: any) => m.id?.toLowerCase().includes('cash') || m.id?.toLowerCase().includes('budget'))
+    if (cashMetric && (cashMetric.change < -50000 || cashMetric.percentChange < -20)) {
+      capitalStyle = 'Heavy Growth Capex Deployer'
+    } else if (cashMetric && cashMetric.change >= 0) {
+      capitalStyle = 'Cash Protective & Margin Preserver'
+    }
+
+    let strategicFocus = 'Balanced Corporate Execution'
+    const capacityMetric = scorecard?.metrics?.find((m: any) => m.id?.toLowerCase().includes('capacity') || m.id?.toLowerCase().includes('production'))
+    if (capacityMetric && capacityMetric.percentChange > 10) {
+      strategicFocus = 'Scale & Production Capacity Expansion'
+    } else if (cashMetric && cashMetric.percentChange > 5) {
+      strategicFocus = 'Liquidity & Cash Flow Protection'
+    }
+
+    const keyTraitSummary = `The player demonstrated a ${riskProfile.toLowerCase()} posture, deploying a ${capitalStyle.toLowerCase()} approach that prioritized ${strategicFocus.toLowerCase()} across operational phases.`
+
+    behaviorInsights = {
+      riskProfile,
+      capitalStyle,
+      strategicFocus,
+      keyTraitSummary,
+    }
+  }
+
+  const defaultCustomization = {
+    showOverallScore: true,
+    showGrade: true,
+    showStrategicArchetype: true,
+    showExecutiveSummary: true,
+    showStrengthsAndTradeoffs: true,
+    showBehaviorInsights: true,
+    showKpiTrajectory: true,
+    showDecisionAudit: true,
+    showCohortBenchmark: true,
+    showStudentRegNumber: true,
+    showStudentEmail: true,
+  }
+  const customization = sim?.reportConfig ? { ...defaultCustomization, ...sim.reportConfig } : defaultCustomization
+
+  return {
+    session,
+    simulation: simulationInfo,
+    learner,
+    scorecard,
+    decisionInsights,
+    cohortComparison: {
+      totalParticipants,
+      rank,
+      percentile,
+      classAverageScore,
+      highestScore,
+      medianScore,
+      metricAverages,
+    },
+    behaviorInsights,
+    customization,
+  }
+}
+
+export function updateReportConfig(simulationId: string, orgId: string, config: any): SimulationRecord | null {
+  const db = getDatabase()
+  const now = new Date().toISOString()
+  db.prepare(`UPDATE simulations SET report_config = ?, updated_at = ? WHERE id = ?`).run(
+    JSON.stringify(config),
+    now,
+    simulationId
+  )
+  return getSimulation(simulationId, { orgId })
 }
 
 export function getAnalytics(simulationId: string, orgId: string): SimulationAnalytics | null {
@@ -575,9 +930,22 @@ export function getAssignmentByInviteToken(token: string): Assignment | null {
   return row ? rowToAssignment(row as Record<string, unknown>) : null
 }
 
-export function listLearnerAssignments(userId: string): Assignment[] {
-  const rows = getDatabase()
-    .prepare(`SELECT * FROM assignments WHERE user_id = ? ORDER BY assigned_at DESC`)
-    .all(userId)
+export function listLearnerAssignments(userId: string, userEmail?: string): Assignment[] {
+  const db = getDatabase()
+  if (userEmail) {
+    try {
+      db.prepare(`UPDATE assignments SET user_id = ? WHERE LOWER(learner_email) = LOWER(?) AND user_id IS NULL`)
+        .run(userId, userEmail)
+    } catch {
+      // ignore
+    }
+  }
+
+  const rows = userEmail
+    ? db.prepare(`SELECT * FROM assignments WHERE user_id = ? OR (learner_email IS NOT NULL AND LOWER(learner_email) = LOWER(?)) ORDER BY assigned_at DESC`)
+        .all(userId, userEmail)
+    : db.prepare(`SELECT * FROM assignments WHERE user_id = ? ORDER BY assigned_at DESC`)
+        .all(userId)
+
   return rows.map((r) => rowToAssignment(r as Record<string, unknown>))
 }

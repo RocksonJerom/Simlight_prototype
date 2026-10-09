@@ -68,7 +68,9 @@ export function AdminLayout({
           <h1 className="text-xl font-bold text-slate-900">{title}</h1>
           {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
         </header>
-        <main className="p-8">{children}</main>
+        <main className="p-6 sm:p-8 lg:p-10">
+          <div className="w-full max-w-[min(100%,90rem)]">{children}</div>
+        </main>
       </div>
     </div>
   )

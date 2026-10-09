@@ -20,6 +20,7 @@ import type {
 } from '../types/simulation'
 import { api } from '../api/client'
 import { createManualTemplate } from '../data/manualTemplate'
+import { defaultAssessment } from '../utils/assessment'
 
 export interface GenerationInfo {
   source: AiGenerationSource
@@ -46,6 +47,8 @@ interface SimulationContextValue {
   addEvent: (phaseId: string, title: string) => void
   setSelectedEventId: (id: string | null) => void
   selectedEventId: string | null
+  selectedPhaseId: string | null
+  setSelectedPhaseId: (id: string | null) => void
   refreshSimulation: () => Promise<void>
   setAssetsFromServer: (assets: MediaAsset[]) => void
   updateMetric: (id: string, updates: Partial<ScoringMetric>) => void
@@ -85,6 +88,7 @@ export function SimulationProvider({
   const [saving, setSaving] = useState(false)
   const [currentStep, setCurrentStep] = useState<WizardStep>(1)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null)
   const [lastGeneration, setLastGeneration] = useState<GenerationInfo | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
@@ -99,6 +103,8 @@ export function SimulationProvider({
       .then((record) => {
         setState(recordToState(record))
         if (record.aiGenerationComplete && record.generated) {
+          const firstPhase = record.generated.phases[0]
+          setSelectedPhaseId(firstPhase?.id ?? null)
           setSelectedEventId(record.generated.events[1]?.id ?? record.generated.events[0]?.id ?? null)
         }
       })
@@ -111,6 +117,7 @@ export function SimulationProvider({
       setSaving(true)
       try {
         const updated = await api.updateSimulation(simulationId, next)
+        skipAutoSave.current = true
         setState(recordToState(updated))
       } catch (e) {
         console.error(e)
@@ -204,6 +211,7 @@ export function SimulationProvider({
       setState(next)
       setLastGeneration(generation)
       skipAutoSave.current = false
+      setSelectedPhaseId(simulation.generated?.phases[0]?.id ?? null)
       setSelectedEventId(
         simulation.generated?.events[1]?.id ?? simulation.generated?.events[0]?.id ?? null
       )
@@ -254,6 +262,7 @@ export function SimulationProvider({
         setState(next)
         setLastGeneration(generation)
         skipAutoSave.current = false
+        setSelectedPhaseId(simulation.generated?.phases[0]?.id ?? null)
         setSelectedEventId(
           simulation.generated?.events[1]?.id ?? simulation.generated?.events[0]?.id ?? null
         )
@@ -287,6 +296,7 @@ export function SimulationProvider({
       const next = recordToState(updated)
       setState(next)
       skipAutoSave.current = false
+      setSelectedPhaseId(generated.phases[0]?.id ?? null)
       setSelectedEventId(generated.events[0]?.id ?? null)
       setCurrentStep(3)
     } catch (err) {
@@ -312,10 +322,11 @@ export function SimulationProvider({
   }, [updateLocal])
 
   const addPhase = useCallback((name: string) => {
+    const newPhaseId = `p${Date.now()}`
     updateLocal((s) => {
       if (!s.generated) return s
       const newPhase: Phase = {
-        id: `p${Date.now()}`,
+        id: newPhaseId,
         name,
         order: s.generated.phases.length + 1,
       }
@@ -324,24 +335,32 @@ export function SimulationProvider({
         generated: { ...s.generated, phases: [...s.generated.phases, newPhase] },
       }
     })
+    setSelectedPhaseId(newPhaseId)
   }, [updateLocal])
 
   const addEvent = useCallback((phaseId: string, title: string) => {
+    const newEventId = `e${Date.now()}`
     updateLocal((s) => {
       if (!s.generated) return s
       const newEvent: Event = {
-        id: `e${Date.now()}`,
+        id: newEventId,
         phaseId,
         title,
         description: 'New event description...',
         impact: { cost: 'Low', budget: 'Neutral', risk: 'Low' },
-        decisions: [{ id: `d${Date.now()}`, text: 'Option 1' }],
+        decisions: [
+          { id: `d${Date.now()}_1`, text: 'Option A' },
+          { id: `d${Date.now()}_2`, text: 'Option B' },
+        ],
+        assessment: defaultAssessment('mcq'),
       }
       return {
         ...s,
         generated: { ...s.generated, events: [...s.generated.events, newEvent] },
       }
     })
+    setSelectedPhaseId(phaseId)
+    setSelectedEventId(newEventId)
   }, [updateLocal])
 
   const refreshSimulation = useCallback(async () => {
@@ -427,6 +446,8 @@ export function SimulationProvider({
         addEvent,
         setSelectedEventId,
         selectedEventId,
+        selectedPhaseId,
+        setSelectedPhaseId,
         refreshSimulation,
         setAssetsFromServer,
         updateMetric,

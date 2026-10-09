@@ -1,0 +1,235 @@
+# SimLight V2 — Decision-Driven Microsimulation Architecture & Implementation Plan
+
+This plan establishes the architecture and implementation roadmap for **SimLight V2**, transforming SimLight from an assessment/quiz platform into a **decision-consequence simulation engine** with an intuitive faculty authoring layer and an executive-level student simulation experience.
+
+---
+
+## 1. Architectural Transformation (V1 vs V2)
+
+| Dimension | SimLight V1 (Current) | SimLight V2 (Proposed) |
+|---|---|---|
+| **Core Paradigm** | Quiz / Assessment (Read text → Answer MCQ/Text/Blank) | **Microsimulation (Situation → Decision → Rule → Consequence → New State)** |
+| **Pacing** | Fixed 3 Phases | **Dynamic Rounds (1 to 15 rounds)** |
+| **State** | Static text + points score + static budget/risk meters | **Live Variables & KPIs (Cash, Inventory, Demand, Satisfaction, Reliability, Margin)** |
+| **Student Input** | MCQ, Free text, Formula, Fill-in-blanks | **8 Decision Components: Select, Allocate, Slider, Quantity, Ranking, Budget, Portfolio, Negotiation** |
+| **Engine** | Question correct/incorrect grading & AI text feedback | **Deterministic Rule & Consequence Engine (WHEN / IF ... THEN ...) with Trade-Offs** |
+| **Dynamics** | Linear event sequence | **Triggered & Probabilistic Events (disruptions, tariffs, demand surges)** |
+| **Learning Evaluation** | % Score on questions | **Business Performance Scorecard + Decision History Audit + What-If / Replay Mode** |
+| **Faculty Role** | Writing questions & answers | **Simulation Architect: Canva + Excel + ChatGPT no-code world builder** |
+
+```mermaid
+graph TD
+    subgraph Faculty_Layer [Faculty Authoring Layer]
+        A[Define Company, Role & Live Variables] --> B[Rounds & Decision Components Builder]
+        B --> C[Visual Rule & Consequence Builder]
+        C --> D[Dynamic Events & Disruptions]
+        E[GenAI Co-Pilot & Pre-built Templates] -.-> A
+    end
+
+    subgraph Simulation_Core [SimLight V2 Simulation Engine]
+        F[(Initial State / Live KPIs)]
+        G[Rule Evaluator]
+        H[Consequence & Trade-off Engine]
+        I[Event Dispatcher]
+        J[What-If / Replay Engine]
+    end
+
+    subgraph Student_Experience [Student Player Cockpit]
+        K[Executive Dashboard: Role, Briefing & Live KPIs]
+        L[Decision Cockpit: 8 Interactive Decision Types]
+        M[SIMULATE Action]
+        N[Trade-Off Consequence Modal & Event Alerts]
+        O[Final Scorecard, Decision History & What-If Replay]
+    end
+
+    Faculty_Layer --> Simulation_Core
+    F --> K
+    K --> L
+    L --> M
+    M --> G
+    G --> H
+    G --> I
+    H --> N
+    N --> F
+    F --> O
+    O --> J
+```
+
+---
+
+## 2. Proposed Changes & Components
+
+### Component 1: Data Models & Types (`src/types/v2.ts`)
+
+#### [NEW] [v2.ts](file:///e:/Simlight_prototype/src/types/v2.ts)
+- **`LiveVariable`**:
+  - `id`: unique identifier (e.g. `'cash'`, `'inventory'`, `'satisfaction'`)
+  - `label`: display name (e.g. `'Cash Available'`, `'Customer Satisfaction'`)
+  - `unit`: `'currency'` (₹/$), `'percent'` (%), `'units'`, `'status'`, `'points'`
+  - `initialValue`: starting value
+  - `currentValue`: current numeric value
+  - `min`, `max`, `step`: bounds
+  - `category`: `'financial'` | `'operational'` | `'market'` | `'risk'` | `'reputation'`
+  - `format`: `'currency_inr'` | `'currency_usd'` | `'percentage'` | `'compact_number'`
+
+- **`DecisionComponent` (8 Types)**:
+  1. `select`: Single / multi selection cards (e.g., Supplier A / B / C)
+  2. `allocate`: Distribute a fixed budget/resource across N categories (e.g. ₹10L across Digital, TV, Influencer, Retail)
+  3. `slider`: Continuous numeric lever (e.g. Price ₹80 – ₹150)
+  4. `quantity`: Numerical stepper / order amount (e.g. 0 to 10,000 units)
+  5. `ranking`: Priority ordering (e.g. Rank Quality, Cost, Delivery, Reliability)
+  6. `budget`: Toggle investments or capital projects with cost caps
+  7. `portfolio`: Select a portfolio of initiatives / products under risk & return limits
+  8. `negotiation`: Negotiation strategy with tactics (Accept, Counteroffer, Threaten to switch, Long-term contract)
+
+- **`SimulationRule` & `Consequence`**:
+  - `condition`: Compound predicate (e.g., `decision.supplier == 'B' && decision.orderQty > 5000`)
+  - `variableDeltas`: Array of modifications (e.g., `{ variableId: 'cash', op: 'add', value: -450000 }`, `{ variableId: 'reliability', op: 'percent_change', value: -12 }`)
+  - `narrativeFeedback`: Descriptive trade-off statement (e.g., *"Supplier negotiation successful. Cost reduced by 5%, but delivery reliability declined."*)
+  - `triggerEventId`: Optional event to trigger
+
+- **`SimulationEvent`**:
+  - `id`, `title`, `description`, `triggerType` (`'round'` | `'condition'` | `'random'`)
+  - `probability`: 0 to 1.0
+  - `impactDeltas`: Direct variable impacts
+  - `badge`: `'disruption'` | `'market_shift'` | `'regulatory'` | `'opportunity'`
+
+- **`SimulationRound`**:
+  - `roundNumber`: 1 to N
+  - `title`: e.g. "Supplier Disruption Crisis"
+  - `situation`: Rich contextual narrative
+  - `role`: e.g. "Supply Chain Manager"
+  - `decisions`: Array of `DecisionComponent`
+  - `rules`: Array of `SimulationRule`
+  - `events`: Array of `SimulationEvent`
+
+- **`V2Simulation`**:
+  - `companyName`: e.g. "ABC Manufacturing Ltd."
+  - `industry`: "Manufacturing" | "FMCG" | "Technology" | "Healthcare" | etc.
+  - `scenarioOverview`: Context and objectives
+  - `variables`: `LiveVariable[]`
+  - `rounds`: `SimulationRound[]`
+  - `templates`: Ready-to-load configurations
+
+---
+
+### Component 2: Simulation Core Engine (`src/engine/v2Engine.ts` and `server/services/v2Engine.ts`)
+
+#### [NEW] [v2Engine.ts](file:///e:/Simlight_prototype/src/engine/v2Engine.ts)
+- **Deterministic Rule Evaluator**:
+  - Evaluates condition expressions against current decision inputs + current live variable values.
+  - Supports operators: `==`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `between`.
+  - Supports compound logic (`AND`, `OR`).
+- **State Transition & Variable Math**:
+  - Applies delta updates: direct assignment (`set`), numeric add/subtract (`add`), percentage modification (`percent_change`).
+  - Clamps results within variable min/max bounds.
+- **Consequence Synthesizer**:
+  - Collates all active rule feedbacks into a structured Consequence Report.
+  - Highlights trade-offs: identifies positive vs negative KPI movements (e.g., *"Awareness +18%, Contribution Margin -4.2%"*).
+- **Event Dispatcher**:
+  - Evaluates probabilistic and conditional events after round decisions are simulated.
+- **What-If / Replay Sandbox Calculator**:
+  - Allows branching from any previous round index: re-calculates all subsequent rounds with the modified decision to show delta comparisons (e.g., *"Original Profit: ₹8.4L vs Alternative: ₹10.1L"*).
+
+---
+
+### Component 3: Executive Student Player (`src/components/v2/player/...`)
+
+#### [NEW] [V2PlayerDashboard.tsx](file:///e:/Simlight_prototype/src/components/v2/player/V2PlayerDashboard.tsx)
+- Modern executive cockpit styling with dark mode / glassmorphic header:
+  - **Company & Role Dossier**: ABC Manufacturing | Supply Chain Manager | Round 1 of 3
+  - **Live Variable KPI Grid**: Real-time cards displaying Cash, Inventory, Monthly Demand, Supplier Reliability, Customer Satisfaction, Profit, etc. with animated delta indicators (`+12%`, `-₹1.5L`).
+  - **Crisis / Situation Dossier**: The current operational problem described with actionable clarity.
+  - **Active Disruption / Event Banners**: Pulsing alerts when an unexpected market or supply chain event strikes.
+  - **Interactive Decision Cockpit**: Renders high-end UI components for each active decision:
+    - *Allocate*: Interactive multi-slider budget allocation with remaining funds gauge and percentage breakdowns.
+    - *Slider*: Precision sliders with min/max bounds and live value readouts.
+    - *Select & Negotiation*: Distinct tactical cards with risk/reward indicators.
+    - *Quantity*: Stepper & volume selector.
+    - *Ranking*: Priority sortable items.
+  - **[ SIMULATE DECISION ] Action**: Trigger button that sends decision to the engine.
+  - **Consequence & Trade-off Reveal Modal**:
+    - Dramatic visual breakdown of what happened.
+    - Direct trade-off summary (e.g., *"Cost reduced by 5%, but delivery reliability decreased"*).
+    - Step button to proceed to the next round.
+  - **End-of-Simulation Performance Scorecard**:
+    - Final business metrics (Profit, Cash, Market Share, Customer Satisfaction, Risk).
+    - Strategic Profile archetype (e.g., "Aggressive Growth / High Risk", "Conservative Quality-First").
+    - Complete Decision History timeline audit.
+    - **"Replay / What-If" Laboratory**: Interactive slider/decision changer to compare alternative outcomes.
+
+---
+
+### Component 4: Faculty Simulation Builder V2 (`src/components/v2/builder/...`)
+
+#### [NEW] [V2Builder.tsx](file:///e:/Simlight_prototype/src/components/v2/builder/V2Builder.tsx)
+- **Step 1: Simulation World & Environment**:
+  - Company name, Industry, Difficulty, Target Duration, Learning Objectives.
+  - Live Variables / KPIs manager: Pre-built templates (Manufacturing, FMCG Marketing, SaaS Startup, HR/People) + Add custom variable (Unit, min, max, initial value).
+- **Step 2: Rounds & Scenarios**:
+  - Add/reorder/delete rounds (1 to 15 rounds).
+  - Define Situation narrative and Student Role for each round.
+- **Step 3: Decision Component Builder**:
+  - Visual picker to add any of the 8 decision components (Select, Allocate, Slider, Quantity, Ranking, Budget, Portfolio, Negotiation) to a round.
+  - Configure options, ranges, budget limits, labels.
+- **Step 4: Visual Rule & Consequence Builder**:
+  - Dropdown sentence builder:
+    `WHEN [Variable/Decision] [is less than / equals / greater than] [Value] THEN [Target Variable] [increases / decreases by] [Value]`
+  - Narrative Consequence statement box (what the student will read when this rule triggers).
+- **Step 5: Dynamic Events Builder**:
+  - Add round events, conditional alerts, and random disruptions with probability percentages.
+- **AI GenAI Simulation Generator**:
+  - Faculty enters natural language prompt (e.g. *"Create a 3-round supply chain disruption simulation for MBA students where raw material prices rise 15%..."*).
+  - Groq LLM endpoint generates full V2 simulation JSON ready to test immediately!
+- **1-Click Pre-built Templates**:
+  - *Supply Chain Disruption* (ABC Manufacturing - Supplier negotiation & inventory crisis)
+  - *Marketing Budget Allocation* (FMCG ₹10L budget across Digital, TV, Influencer, Retail)
+  - *Tech Startup Cash Crunch* (3 months runway, burn rate vs growth)
+  - *HR Attrition Crisis* (21% attrition, compensation vs culture vs workload)
+
+---
+
+### Component 5: API & Backend Integration
+
+#### [NEW] [server/v2/routes.ts](file:///e:/Simlight_prototype/server/v2/routes.ts)
+- `POST /api/v2/simulate`: Accepts current state + round decisions, executes rules/events, returns updated state + consequences.
+- `POST /api/v2/ai/generate`: Prompts Groq (or fallback) to generate a complete V2 simulation model.
+- `GET /api/v2/templates`: Provides the 4 pre-built templates out-of-the-box.
+- `POST /api/v2/sessions/:id/what-if`: Re-evaluates decision branches for the Replay feature.
+
+#### [MODIFY] [server/index.ts](file:///e:/Simlight_prototype/server/index.ts)
+- Mount `/api/v2` routes without modifying existing V1 endpoints (100% backward compatible).
+
+#### [MODIFY] [src/App.tsx](file:///e:/Simlight_prototype/src/App.tsx)
+- Route `/sim-v2/:id` or toggle in existing simulation player to render the V2 Executive Cockpit.
+- Route `/creator-v2/:id` and `/creator-v2/new` to provide the direct V2 Builder.
+
+---
+
+## 3. Verification Plan
+
+### Automated Verification
+1. **Engine Logic Tests**:
+   - Verify rule evaluation correctly triggers deltas for condition matches (`==`, `>`, `<`, compound `&&`).
+   - Verify variable bounds clamping (e.g. satisfaction cannot exceed 100% or drop below 0%).
+   - Verify event probability and round-trigger logic.
+   - Verify What-If branching returns accurate comparative trajectories.
+2. **Build & Typecheck**:
+   - Run `npm run build` (`tsc -b && vite build`) to ensure strict TypeScript compliance.
+   - Run `npm run lint` (`oxlint`).
+
+### Manual & Interactive Verification
+1. **Playthrough the Supply Chain Disruption Simulation**:
+   - Open V2 player on the ABC Manufacturing simulation.
+   - Test Round 1 decisions (Supplier: Negotiate, Order: 7,500, Delivery: Normal).
+   - Click **[ SIMULATE ]** → Verify Consequence modal appears, variables animate (Cost -5%, Reliability -12%), trade-offs are displayed.
+   - Trigger Round 2 Disruption Event ("Supplier capacity drops 30%").
+   - Complete Round 3 → Verify Final Scorecard, Decision History Audit, and Replay / What-If tool.
+2. **Playthrough the Marketing Budget Allocation Simulation**:
+   - Allocate ₹10L across Digital, TV, Influencers, Retail.
+   - Verify allocation sums cannot exceed ₹10L.
+   - Verify Awareness gains vs Margin decline trade-offs.
+3. **Faculty V2 Builder Walkthrough**:
+   - Create a simulation from template or AI prompt.
+   - Modify a rule visually via dropdowns.
+   - Preview and simulate immediately.

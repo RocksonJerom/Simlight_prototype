@@ -33,7 +33,7 @@ export function FooterPanels() {
 
   return (
     <footer className="border-t border-slate-200 bg-white mt-8">
-      <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="w-full max-w-[min(100%,90rem)] mx-auto p-6 sm:p-8 lg:px-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="rounded-xl border border-slate-200 p-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-3 uppercase tracking-wide">
             Output — What is Created?
